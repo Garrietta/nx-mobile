@@ -4,6 +4,7 @@ import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.runner.NdsLayout
 import kotlin.math.floor
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -49,7 +50,11 @@ private const val EPSILON = 0.001f
  * drawn first (above the hinge, or on top in the stack); after a 3DS SWAP the touch screen, so each rect is fitted to
  * the aspect of the screen it shows (the DS's two screens share one). [bottomCentred]: the touch screen sits centred
  * in the area below the hinge instead of against the fold (the flat-unfolded virtual hinge: the screen moves down
- * into the bottom half, and the pad halves follow it, since their boxes centre on it).
+ * into the bottom half, and the pad halves follow it, since their boxes centre on it). A centred 3DS touch screen
+ * additionally clears the halves' drawn buttons entirely: it fits between their outer extent (the cluster padding
+ * plus the button groups' width, plus any cutout shift) instead of the 3/4-reach set-aside, so it never runs under
+ * them; the half-folded layout keeps the quarter-reach allowance, and DS keeps the shared fit (its whole scales
+ * already clear on tablet-class windows).
  */
 fun tabletopDs(
     windowW: Int,
@@ -72,6 +77,16 @@ fun tabletopDs(
     if (!screen.isTablet) return stackedTop(topArea, kind, big)
     val aside = if (controller) 0f else LayoutConstants.TABLETOP_DS_SET_ASIDE * reach.total
     val bottomSpace = PxRect(aside, bottomArea.y, bottomArea.width - 2f * aside, bottomArea.height)
+    // The centred (virtual-hinge) 3DS touch screen fits between the halves' drawn buttons, not the
+    // set-aside: the buttons start at the cluster padding (plus any cutout shift) and run buttonsPx
+    // wide from each edge, and the set-aside (3/4 reach) is shorter than that extent, so fitting to
+    // bottomSpace lets the screen run under them. A controller leaves no halves, so the full area stays.
+    val touchSpace = if (bottomCentred && kind == DsKind.N3DS && !controller) {
+        val padPx = LayoutConstants.CLUSTER_PADDING_DP * density
+        val cutoutShift = max(0f, reach.edgePx - padPx - LayoutConstants.EDGE_NUDGE_UNITS * unitPx)
+        val clear = padPx + cutoutShift + reach.buttonsPx
+        PxRect(clear, bottomArea.y, bottomArea.width - 2f * clear, bottomArea.height)
+    } else bottomSpace
 
     val (topW, topH) = when (kind) {
         DsKind.DS -> wholeScale(topArea, DS_W, DS_H, atLeast1 = true)
@@ -79,10 +94,10 @@ fun tabletopDs(
     }
     val (bottomW, bottomH) = when (kind) {
         DsKind.DS -> wholeScale(bottomSpace, DS_W, DS_H, atLeast1 = true)
-        DsKind.N3DS -> fitted(bottomSpace, n3dsAspect(big.other))
+        DsKind.N3DS -> fitted(touchSpace, n3dsAspect(big.other))
     }
     // The touch screen must fit below the hinge between the halves, and the top screen above it (DS: 1x at least).
-    if (bottomW < 1f || bottomH < 1f || bottomW > bottomSpace.width || bottomH > bottomSpace.height ||
+    if (bottomW < 1f || bottomH < 1f || bottomW > touchSpace.width || bottomH > bottomSpace.height ||
         topW < 1f || topH < 1f || topH > topArea.height
     ) return stackedTop(topArea, kind, big)
     val top = atFold(topArea, topW, topH, y = hingeTop - topH)

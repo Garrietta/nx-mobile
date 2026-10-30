@@ -195,6 +195,31 @@ class TabletopDsTest {
     }
 
     @Test
+    fun virtual_hinge_3ds_touch_screen_clears_the_pad_halves() {
+        val p = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.N3DS, 122f, reach, 2.625f, false, bottomCentred = true)
+        assertEquals(TabletopDsMode.SPLIT, p.mode)
+        // Top screen unchanged: full window width, its bottom edge on the 1224 fold.
+        assertEquals(PxRect(0f, 116f, 1848f, 1108f), p.top)
+        // Was 1200 px wide at x 324, running 84 px under each half's buttons (their extent is the
+        // 16 dp cluster padding plus the 366 px button groups: 42 + 366 = 408 from each edge). Now
+        // the touch screen fits exactly between them: 1032 px wide, zero overlap, zero gap.
+        assertEquals(PxRect(408f, 1449f, 1032f, 774f), p.bottom)
+        assertEquals(42f + 366f, p.bottom.x)
+        assertEquals(1848f - (42f + 366f), p.bottom.x + p.bottom.width)
+        assertNotNull(p.left)
+        assertNotNull(p.right)
+    }
+
+    @Test
+    fun virtual_hinge_ds_sizing_unchanged_by_the_clearance_fit() {
+        val p = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.DS, 122f, reach, 2.625f, false, bottomCentred = true)
+        assertEquals(TabletopDsMode.SPLIT, p.mode)
+        // The DS whole scales already clear the buttons (412 > 408); the clearance fit leaves them alone.
+        assertEquals(PxRect(412f, 1452f, 1024f, 768f), p.bottom)
+        assertTrue(p.bottom.x >= 42f + 366f)
+    }
+
+    @Test
     fun a_reading_the_split_cannot_fit_is_not_used_on_the_fold() {
         val bad = place(DsKind.DS, h = 1386, hingeBottom = 1236)   // 150 px below the hinge
         assertEquals(TabletopDsMode.STACKED_TOP, bad.mode)
