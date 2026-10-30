@@ -22,23 +22,42 @@ import com.nxredux.mobile.options.PxRect
  * that frame (default layout, equal screens, swap held) while this layout applies, as the
  * half-folded one does. The touch screen takes touches wherever it is drawn. Shaded regions
  * share one size (one preset chain): the full-width screen is shaded, the inset one only when
- * it is the same size (it never is here). Empty when the area holds no top screen over an
- * inset one (a window shorter than the top screen, or no room for a pixel of the inset).
+ * it is the same size (it never is here).
+ *
+ * v0.4.8 — the inset screen has a floor (the 2026-10-30 verdict: on the device's folded
+ * window the full-width top screen plus the portrait band left only ~100-200 px of panel
+ * height, so the inset rendered tiny, and a cutout-margin change later shrank it to a sliver).
+ * The inset is now at least half the window width: on a tall window the full-width top screen
+ * already leaves more than that, so those layouts are unchanged; on a short window the top
+ * screen narrows (centred) just enough to guarantee the inset, instead of the inset taking
+ * whatever crumbs remain. The inset's bottom edge is the game area's bottom at most (its height
+ * never exceeds the space below the top screen), so it ends at or above the band's top and the
+ * band's buttons cannot cover its corners. Empty when the area holds no usable split — a
+ * window no taller than the minimum inset, or either screen narrower than half the window —
+ * so the caller keeps the current frame instead of drawing a sliver.
  */
 fun foldedPortraitRegions(w: Float, h: Float, kind: DsKind, big: NdsScreen): List<NdsRegion> {
     if (w <= 0f || h <= 0f) return emptyList()
     fun src(screen: NdsScreen) = if (kind == DsKind.DS) NdsLayout.src(screen) else DualScreen.n3dsSrc(screen)
-    val topH = NdsLayout.wholePx(w * if (kind == DsKind.DS) 3f / 4f else 3f / 5f)
+    // The inset screen's floor: half the window width at 4:3, so the minimum inset height is 3/8 of the width.
+    val minInsetH = w * 3f / 8f
+    val fullTopH = NdsLayout.wholePx(w * if (kind == DsKind.DS) 3f / 4f else 3f / 5f)
+    // Full-width top screen when it leaves the minimum inset; otherwise narrow it (centred) just enough.
+    val topH = minOf(fullTopH, NdsLayout.wholePx(h - minInsetH))
     val spaceH = h - topH
     if (topH < 1f || spaceH < 1f) return emptyList()
+    val topW = NdsLayout.wholePx(topH * if (kind == DsKind.DS) 4f / 3f else 5f / 3f)
     val bottomW = NdsLayout.wholePx(minOf(w, spaceH * 4f / 3f))
     val bottomH = NdsLayout.wholePx(bottomW * 3f / 4f)
     if (bottomW < 1f || bottomH < 1f) return emptyList()
+    // A split with either screen below half the window width is a sliver, not a layout: keep the current frame.
+    if (topW < w / 2f || bottomW < w / 2f) return emptyList()
+    val topX = NdsLayout.wholePx((w - topW) / 2f)
     val bottomX = NdsLayout.wholePx((w - bottomW) / 2f)
     val other = big.other
-    val sameSize = w == bottomW && topH == bottomH
+    val sameSize = topW == bottomW && topH == bottomH
     return listOf(
-        NdsRegion(big, src(big), PxRect(0f, 0f, w, topH), shaded = true, touch = big == NdsScreen.BOTTOM),
+        NdsRegion(big, src(big), PxRect(topX, 0f, topW, topH), shaded = true, touch = big == NdsScreen.BOTTOM),
         NdsRegion(other, src(other), PxRect(bottomX, topH, bottomW, bottomH), shaded = sameSize, touch = other == NdsScreen.BOTTOM),
     )
 }

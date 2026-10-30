@@ -65,12 +65,50 @@ class FoldedPortraitRegionsTest {
     }
 
     @Test
-    fun folded_empty_when_no_top_over_inset_fits() {
+    fun folded_ds_rebalanced_on_the_verdict_window() {
+        // The 2026-10-30 verdict window (1248 wide, game area 1144 tall): the full-width top
+        // screen (936 tall) would leave 208 px for the inset. v0.4.8 narrows the top screen
+        // (centred) just enough to guarantee the inset half the window width instead.
+        val regions = foldedPortraitRegions(1248f, 1144f, DsKind.DS, NdsScreen.TOP)
+        assertEquals(2, regions.size)
+        assertEquals(PxRect(173f, 0f, 901f, 676f), regions[0].dst)
+        assertEquals(PxRect(312f, 676f, 624f, 468f), regions[1].dst)
+        assertTrue(regions[1].touch)
+        // The inset ends exactly at the game area's bottom (the band's top): the band's buttons
+        // cannot cover its corners, and the panel (1972 - 676 = 1296 px) stays over half the window.
+        assertEquals(1144f, regions[1].dst.y + regions[1].dst.height)
+        assertTrue(1972f - 676f > 1972f / 2f)
+    }
+
+    @Test
+    fun folded_3ds_rebalanced_on_the_verdict_window() {
+        val regions = foldedPortraitRegions(1248f, 1144f, DsKind.N3DS, NdsScreen.TOP)
+        assertEquals(2, regions.size)
+        assertEquals(PxRect(61f, 0f, 1126f, 676f), regions[0].dst)
+        assertEquals(PxRect(312f, 676f, 624f, 468f), regions[1].dst)
+        assertTrue(regions[1].touch)
+        assertEquals(1144f, regions[1].dst.y + regions[1].dst.height)
+    }
+
+    @Test
+    fun folded_short_window_rebalances_instead_of_collapsing() {
+        // One pixel over the full-width top screen used to mean an empty layout; v0.4.8
+        // rebalances (narrower top, minimum inset) instead of leaving the caller with no split.
+        val regions = foldedPortraitRegions(1080f, 811f, DsKind.DS, NdsScreen.TOP)
+        assertEquals(2, regions.size)
+        assertEquals(PxRect(269f, 0f, 541f, 406f), regions[0].dst)
+        assertEquals(PxRect(270f, 406f, 540f, 405f), regions[1].dst)
+    }
+
+    @Test
+    fun folded_empty_when_no_usable_split_fits() {
         assertTrue(foldedPortraitRegions(0f, 1441f, DsKind.DS, NdsScreen.TOP).isEmpty())
         assertTrue(foldedPortraitRegions(1080f, 0f, DsKind.DS, NdsScreen.TOP).isEmpty())
-        // A window shorter than the full-width top screen holds no split.
+        // A window this short would need a sliver top screen (126 px wide on a 1080 window):
+        // keep the current frame instead of drawing it.
         assertTrue(foldedPortraitRegions(1080f, 500f, DsKind.DS, NdsScreen.TOP).isEmpty())
-        // One pixel of panel height leaves no pixel of inset screen (1 x 0.75 floors to 0 tall).
-        assertTrue(foldedPortraitRegions(1080f, 811f, DsKind.DS, NdsScreen.TOP).isEmpty())
+        // A window no taller than the minimum inset (3/8 of the width) holds no split at all.
+        assertTrue(foldedPortraitRegions(1080f, 405f, DsKind.DS, NdsScreen.TOP).isEmpty())
+        assertTrue(foldedPortraitRegions(1080f, 400f, DsKind.DS, NdsScreen.TOP).isEmpty())
     }
 }

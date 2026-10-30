@@ -878,7 +878,9 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
      * draws fullscreen ([applyLayout]: topMargin 0, under the camera hole and the hidden status
      * bar area) and the screens split across it (the renderer's folded regions: the top screen
      * full width on top, the bottom screen inset in the control panel below it), instead of
-     * stacking above the band. Other consoles' folded layouts are untouched (the game-kind gate).
+     * stacking above the band. [applyGameTopMargin] keeps that top edge at 0 too, so a cutout
+     * change on a fold cannot push the game back below the cutout and collapse the inset
+     * (v0.4.8). Other consoles' folded layouts are untouched (the game-kind gate).
      */
     fun foldedPortraitDs(shape: WindowShape, portrait: Boolean): Boolean =
         portrait && !shape.screenClass.isTablet &&
@@ -978,14 +980,19 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         // ([windowShape]) before it was known: lay it out again whole, unless the band comes out the same (a rotation
         // already laid out from the configuration change), when only the game's top moves.
         val portrait = orientation == Configuration.ORIENTATION_PORTRAIT
-        val bandPx = activity.windowShape().portraitBandPx.roundToInt()
+        val shape = activity.windowShape()
+        val bandPx = shape.portraitBandPx.roundToInt()
         if (cutoutNeedsRelayout(Build.VERSION.SDK_INT, portrait, tabletop() != null, builtBandPx, bandPx)) {
             applyLayout(orientation)
             return
         }
         val game = findViewById<FrameLayout>(R.id.gameContainer)
         val lp = game.layoutParams as? FrameLayout.LayoutParams ?: return
-        val top = if (portrait) cutoutTop else 0
+        // Folded-portrait DS / 3DS draws fullscreen (v0.4.8): [applyLayout] puts the game container at the window's
+        // top edge, and this listener — which fires on every cutout change, exactly what a fold does — must not push
+        // it back below the cutout afterwards. The two writers disagreed, and every cutout change shrank the game
+        // area and recomputed a smaller inset screen (the 2026-10-30 verdict's tiny, then sliver, bottom screen).
+        val top = if (!portrait) 0 else if (foldedPortraitDs(shape, portrait)) 0 else cutoutTop
         if (lp.topMargin != top) {
             lp.topMargin = top
             game.layoutParams = lp
