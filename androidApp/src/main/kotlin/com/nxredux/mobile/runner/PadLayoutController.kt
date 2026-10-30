@@ -543,8 +543,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     /**
      * The half-folded DS / 3DS pad's unit (the cover screen's button size, [tabletopDsUnitPx]) and reach in the window
      * [shape]: the halves' drawn buttons once both have reported ([MeasuredButtons]), else the estimate. The
-     * flat-unfolded virtual hinge scales the halves down ([VIRTUAL_PAD_SCALE]): the controls sit aside of the touch
-     * screen, not crowding it; the real half-folded pad keeps the cover screen's size.
+     * flat-unfolded virtual hinge scales the halves up ([VIRTUAL_PAD_SCALE]) into the room the smaller touch screen
+     * leaves, so the d-pad and face buttons read larger; the real half-folded pad keeps the cover screen's size.
      */
     fun tabletopDsPad(shape: WindowShape = activity.windowShape()): LandscapePad {
         val baseUnit = tabletopDsUnitPx(shape.ydpi, shape.density)
@@ -562,7 +562,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     /**
      * Where half-folded [tt] puts this DS / 3DS game's screens and pad halves in the window [shape] ([tabletopDs], window
      * px): the hinge from [tt], the [pad]'s unit, reach and second row, no halves with a controller in the layout.
-     * The flat-unfolded virtual hinge centres the touch screen in the bottom half instead of against the fold.
+     * The flat-unfolded virtual hinge packs the touch screen up against the fold instead of centring it in the bottom half.
      */
     fun tabletopDsPlacement(shape: WindowShape, tt: TabletopLayout, pad: LandscapePad = tabletopDsPad(shape)): TabletopDsPlacement {
         val (w, h) = rootSize()
@@ -1030,8 +1030,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
 private const val PORTRAIT_TOGGLE_EDGE_DP = 6f
 private const val PORTRAIT_TOGGLE_CENTRE_DP = 24f
 
-/** The flat-unfolded virtual hinge's pad scale: the halves draw a little smaller than the half-folded pad. */
-private const val VIRTUAL_PAD_SCALE = 0.85f
+/** The flat-unfolded virtual hinge's pad scale: the halves draw larger than the half-folded pad, into the room the smaller touch screen leaves. */
+private const val VIRTUAL_PAD_SCALE = 1.1f
 
 /** Extra room round [PortraitPadToggle], dp, past its own padding: [endDp] from the right, [bottomDp] from the bottom. */
 internal data class PortraitToggleInset(val endDp: Float, val bottomDp: Float) {

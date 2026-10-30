@@ -182,41 +182,70 @@ class TabletopDsTest {
         assertNotNull(halfFoldedPreview(1080f, 2400f, ScreenClass.REGULAR_PHONE, 0f, 400f, 2.625f, 0f, 0f, true, 3.3f, 2, DsKind.N3DS))
     }
 
+    /** The 1.1-scale virtual pad's unit and estimate reach, scaled from the 0.85-scale inputs above. */
+    private val unit11 = 122f * 1.1f / 0.85f
+    private val reach11 = Reach(42f + 0.2f * unit11, 366f * unit11 / 122f)
+
+    /** The 1.1-scale virtual pad with measured (drawn) buttons: the device-measured extent at 0.85 was ~335 px
+     * from each edge, so the groups measure ~269 px there and ~348 px at 1.1 — well under the 474 px estimate. */
+    private val reach11Measured = Reach(42f + 0.2f * unit11, 348f)
+
     @Test
-    fun virtual_hinge_bottom_screen_sits_centred_in_the_bottom_half() {
+    fun virtual_hinge_touch_screen_packs_up_against_the_hinge() {
         val p = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.DS, 122f, reach, 2.625f, false, bottomCentred = true)
         assertEquals(TabletopDsMode.SPLIT, p.mode)
-        // bottom area 1224..2448 (1224 tall); the 4x touch screen (1024x768) centres in it, not against the fold
-        assertEquals(PxRect(412f, 1452f, 1024f, 768f), p.bottom)
-        // top screen unchanged: 6x with its bottom edge on the 1224 fold
+        // Same inputs as the old centred test: the clearance fit (432 extent + 63 margin each side leaves
+        // 858 px) now gives 3x, not 4x, and its top edge sits a 31.5 px hinge gap below the fold (1452 before).
+        assertEquals(PxRect(540f, 1255.5f, 768f, 576f), p.bottom)
+        // Top screen unchanged: 6x with its bottom edge on the 1224 fold.
         assertEquals(PxRect(156f, 72f, 1536f, 1152f), p.top)
         assertNotNull(p.left)
         assertNotNull(p.right)
     }
 
     @Test
-    fun virtual_hinge_3ds_touch_screen_clears_the_pad_halves() {
-        val p = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.N3DS, 122f, reach, 2.625f, false, bottomCentred = true)
+    fun virtual_hinge_3ds_touch_screen_clears_the_grown_halves_with_a_margin() {
+        val p = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.N3DS, unit11, reach11, 2.625f, false, bottomCentred = true)
         assertEquals(TabletopDsMode.SPLIT, p.mode)
         // Top screen unchanged: full window width, its bottom edge on the 1224 fold.
         assertEquals(PxRect(0f, 116f, 1848f, 1108f), p.top)
-        // Was 1200 px wide at x 324, running 84 px under each half's buttons (their extent is the
-        // 16 dp cluster padding plus the 366 px button groups: 42 + 366 = 408 from each edge). Now
-        // the touch screen fits exactly between them: 1032 px wide, zero overlap, zero gap.
-        assertEquals(PxRect(408f, 1449f, 1032f, 774f), p.bottom)
-        assertEquals(42f + 366f, p.bottom.x)
-        assertEquals(1848f - (42f + 366f), p.bottom.x + p.bottom.width)
+        // 1.1-scale estimate: extent 547.2 + 63 margin each side leaves 627.6 px: 627x470, packed up —
+        // v0.4.4's 1032x774 exact fit sat 0.2 unit inside the buttons' extent and read as overlap.
+        assertEquals(PxRect(610f, 1255.5f, 627f, 470f), p.bottom)
+        // A real margin, not an exact fit: ~63 px of pad between the screen and the buttons each side.
+        assertTrue(p.bottom.x - (reach11.edgePx + reach11.buttonsPx) >= 60f)
+        assertTrue(1848f - (p.bottom.x + p.bottom.width) - (reach11.edgePx + reach11.buttonsPx) >= 60f)
         assertNotNull(p.left)
         assertNotNull(p.right)
     }
 
     @Test
-    fun virtual_hinge_ds_sizing_unchanged_by_the_clearance_fit() {
-        val p = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.DS, 122f, reach, 2.625f, false, bottomCentred = true)
+    fun virtual_hinge_ds_shrinks_to_clear_the_grown_halves_on_the_estimate() {
+        val p = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.DS, unit11, reach11, 2.625f, false, bottomCentred = true)
         assertEquals(TabletopDsMode.SPLIT, p.mode)
-        // The DS whole scales already clear the buttons (412 > 408); the clearance fit leaves them alone.
-        assertEquals(PxRect(412f, 1452f, 1024f, 768f), p.bottom)
-        assertTrue(p.bottom.x >= 42f + 366f)
+        // Estimate reach leaves 627.6 px: 2x, packed up — the settled 3x comes once the buttons measure.
+        assertEquals(PxRect(668f, 1255.5f, 512f, 384f), p.bottom)
+    }
+
+    @Test
+    fun virtual_hinge_measured_buttons_settle_the_screens_larger() {
+        // After the halves report their drawn groups, the fit uses the measured reach: the DS settles at
+        // 3x and the 3DS at 878x659 — larger than the pre-measure estimate, still margined and packed up.
+        val ds = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.DS, unit11, reach11Measured, 2.625f, false, bottomCentred = true)
+        assertEquals(PxRect(540f, 1255.5f, 768f, 576f), ds.bottom)
+        val n3ds = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.N3DS, unit11, reach11Measured, 2.625f, false, bottomCentred = true)
+        assertEquals(PxRect(485f, 1255.5f, 878f, 659f), n3ds.bottom)
+        assertTrue(n3ds.bottom.x - (reach11Measured.edgePx + reach11Measured.buttonsPx) >= 60f)
+    }
+
+    @Test
+    fun virtual_hinge_halves_never_cross_the_hinge() {
+        val p = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.N3DS, unit11, reach11, 2.625f, false, bottomCentred = true)
+        // The grown boxes would centre above the fold; the clamp holds their tops at the hinge gap.
+        assertEquals(1255.5f, p.left!!.topMarginPx)
+        val box = tabletopDsPadBoxes(p, 2448)!!
+        assertTrue(box.topMarginPx >= 1224)
+        assertTrue(box.topMarginPx + box.heightPx <= 2448)
     }
 
     @Test
