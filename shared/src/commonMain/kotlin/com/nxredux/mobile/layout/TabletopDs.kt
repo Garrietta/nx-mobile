@@ -4,7 +4,6 @@ import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.runner.NdsLayout
 import kotlin.math.floor
-import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -35,11 +34,14 @@ private const val N3DS_BOTTOM_W = 320f
 private const val N3DS_H = 240f
 private const val EPSILON = 0.001f
 
-/** The centred (virtual-hinge) touch screen's visible margin to each pad half's buttons, dp. */
-private const val VIRTUAL_TOUCH_MARGIN_DP = 24f
+/** The centred (virtual-hinge) touch screen's visible margin to each pad half's buttons, dp: small but
+ * unmistakable. The purple-rectangle sketch itself touches the buttons, so the margin stays small rather
+ * than none — v0.4.4's exact fit sat 0.2 unit inside the buttons' extent and read as overlap on device. */
+private const val VIRTUAL_TOUCH_MARGIN_DP = 8f
 
-/** The centred (virtual-hinge) touch screen's gap below the hinge, dp: a hinge-like sliver. */
-private const val VIRTUAL_HINGE_GAP_DP = 12f
+/** The centred (virtual-hinge) touch screen's gap below the hinge, dp: zero — the touch screen touches the
+ * hinge line, so the two screens touch each other (v0.4.6; v0.4.5's 12 dp sliver is gone). */
+private const val VIRTUAL_HINGE_GAP_DP = 0f
 
 /**
  * The top screen fills the area above the hinge (x 0..[windowW], [cutoutTop]..[hingeTop]); the bottom screen sits in
@@ -56,12 +58,13 @@ private const val VIRTUAL_HINGE_GAP_DP = 12f
  * draw their second row (STYLUS / SWAP), so their boxes are that row taller, as the landscape pad's. [big]: the screen
  * drawn first (above the hinge, or on top in the stack); after a 3DS SWAP the touch screen, so each rect is fitted to
  * the aspect of the screen it shows (the DS's two screens share one). [bottomCentred]: the flat-unfolded virtual hinge:
- * the touch screen packs up against the fold with only a hinge gap above it instead of sitting centred in the bottom
- * half (which left a dead band above and below it), and fits between the halves' drawn buttons with a real margin
+ * the touch screen's top edge sits ON the fold (zero gap — the two screens touch each other) instead of sitting centred in the bottom
+ * half (which left a dead band above and below it), and fits between the halves' drawn buttons with a small margin
  * (both kinds: the buttons' outer extent is the reach, plus [VIRTUAL_TOUCH_MARGIN_DP] a side — v0.4.4's exact fit sat
- * 0.2 unit inside that extent and read as overlap on device). The halves keep their bottom-half-centred boxes,
- * clamped so their tops never cross the hinge; the half-folded layout keeps the quarter-reach allowance and the
- * centred fit.
+ * 0.2 unit inside that extent and read as overlap on device). The halves' boxes are pinned at the hinge, so the
+ * shoulders sit just below it; the halves draw shoulders + cluster only, the cluster dropped below its half-folded
+ * place by the virtual-hinge spacer in the halves, and the six pill buttons move to a bottom pill row
+ * (VirtualHingePillRow in ui.nx). The half-folded layout keeps the quarter-reach allowance and the centred fit.
  */
 fun tabletopDs(
     windowW: Int,
@@ -84,10 +87,11 @@ fun tabletopDs(
     if (!screen.isTablet) return stackedTop(topArea, kind, big)
     val aside = if (controller) 0f else LayoutConstants.TABLETOP_DS_SET_ASIDE * reach.total
     val bottomSpace = PxRect(aside, bottomArea.y, bottomArea.width - 2f * aside, bottomArea.height)
-    // The centred (virtual-hinge) touch screen fits between the halves' drawn buttons with a real margin,
+    // The centred (virtual-hinge) touch screen fits between the halves' drawn buttons with a small margin,
     // both kinds: the buttons' outer extent from each edge is the reach (the cluster padding and nudge
     // in [reach.edgePx] plus the button groups), and v0.4.4's exact fit sat 0.2 unit inside that extent,
-    // which reads as overlap on device. A controller leaves no halves, so the full area stays; the
+    // which reads as overlap on device; the margin stays small rather than none, since the sketched
+    // rectangle itself touches the buttons. A controller leaves no halves, so the full area stays; the
     // half-folded layout keeps the quarter-reach set-aside untouched.
     val touchMarginPx = VIRTUAL_TOUCH_MARGIN_DP * density
     val hingeGapPx = VIRTUAL_HINGE_GAP_DP * density
@@ -109,9 +113,9 @@ fun tabletopDs(
         topW < 1f || topH < 1f || topH > topArea.height
     ) return stackedTop(topArea, kind, big)
     val top = atFold(topArea, topW, topH, y = hingeTop - topH)
-    // Centred: the touch screen packs up against the fold with only the hinge gap above it, its x
-    // centred as before — not vertically centred, which left a dead band above and below it. The top
-    // screen already sits on the fold, so the two screens meet across a hinge-like sliver.
+    // Centred: the touch screen's top edge sits ON the fold (zero gap), its x centred as before — not
+    // vertically centred, which left a dead band above and below it. The top screen already sits on the
+    // fold, so the two screens touch each other.
     val bottom = if (bottomCentred) PxRect(
         bottomArea.x + NdsLayout.wholePx((bottomArea.width - bottomW) / 2f),
         hingeBottom.toFloat() + hingeGapPx, bottomW, bottomH,
@@ -119,11 +123,11 @@ fun tabletopDs(
     if (controller) return TabletopDsPlacement(TabletopDsMode.SPLIT, top, bottom, null, null)
     // One placement for both halves: the caller mirrors it to the right edge.
     val half = clusterPlacement(bottomArea, bottom, unitPx, reach, density, toolRow = secondRow)
-    // Centred: the grown halves' boxes must not cross the hinge — their tops sit at the fold plus the
-    // gap at the highest, so the shoulder buttons stay below the top screen. (A tall box centred on
-    // the bottom half would otherwise put its top above the hinge.)
+    // Centred: the halves' boxes are pinned at the fold, so the shoulders sit just below the top screen
+    // and the cluster drops from its bottom-half-centred place by the halves' own spacer. (A tall box
+    // centred on the bottom half would otherwise put its top above the hinge.)
     val placedHalf = if (bottomCentred) {
-        half.copy(topMarginPx = max(half.topMarginPx, hingeBottom.toFloat() + hingeGapPx))
+        half.copy(topMarginPx = hingeBottom.toFloat())
     } else half
     return TabletopDsPlacement(TabletopDsMode.SPLIT, top, bottom, placedHalf, placedHalf)
 }

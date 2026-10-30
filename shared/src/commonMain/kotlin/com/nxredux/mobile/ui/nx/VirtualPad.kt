@@ -1730,6 +1730,14 @@ fun landscapeClusterUnits(profile: PadProfile): Float = if (profile.dualSticks) 
 private const val SYSTEM_PILL_W_UNITS = 1.4f
 private const val SYSTEM_PILL_GAP = 12f
 
+/**
+ * The virtual hinge's drop of the d-pad / face cluster below the shoulders, units: with the halves' boxes
+ * pinned at the hinge, the shoulders sit just below the fold while the cluster fills the lower half, clear
+ * of the bottom pill row ([VirtualHingePillRow]). On the 1848 x 2448 test window (unit ~158 px) this puts
+ * the cluster centre ~1945 px — below the half-folded centre (1836) and ~70 px clear of the pill row.
+ */
+internal const val VIRTUAL_HINGE_CLUSTER_SPACER_UNITS = 1.8f
+
 /** An overlay cluster's inset from its screen edge, units: the right cluster's, which the left mirrors over the game. */
 internal const val OVERLAY_EDGE_NUDGE = 0.2f
 
@@ -2146,6 +2154,47 @@ fun PortraitOverlayPad(
 }
 
 /**
+ * The virtual hinge's six pill buttons in one centred row along the very bottom: MENU, the d-pad / stick
+ * toggle, STYLUS, SELECT, START, SWAP, in that order, each a system pill ([SYSTEM_PILL_W_UNITS] units wide,
+ * 12 dp apart). The row is symmetric by construction — one centred object, never a split or a scatter — and
+ * fills the bottom void the halves' pill rows left. [tools] null (not a DS / 3DS game) leaves STYLUS and
+ * SWAP out; the four system pills stay centred. The caller sizes this (a full-width view at the bottom);
+ * the pills centre themselves across it.
+ */
+@Composable
+fun VirtualHingePillRow(
+    onEvent: (PadEvent) -> Unit,
+    profile: PadProfile,
+    tools: PadTools?,
+    useJoystick: Boolean?,
+    onUseJoystickChange: (Boolean) -> Unit,
+    unit: Dp,
+    modifier: Modifier = Modifier,
+) {
+    val emit = rememberEmit(onEvent)
+    val stick = rememberStickChoice(useJoystick, onUseJoystickChange)
+    val sysH = unit * 0.72f
+    val sysW = unit * SYSTEM_PILL_W_UNITS
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        PadButton(NxButton.MENU, sysH, emit, shape = PadStyle.pillShape, width = sysW)
+        Spacer(Modifier.width(SYSTEM_PILL_GAP.dp))
+        ToggleButton(if (stick.useJoystick) "D-PAD" else "STICK", stick::toggle, sysH, sysW)
+        if (tools != null) {
+            Spacer(Modifier.width(SYSTEM_PILL_GAP.dp))
+            StylusButton(tools, sysH, sysW)
+        }
+        Spacer(Modifier.width(SYSTEM_PILL_GAP.dp))
+        PadButton(NxButton.SELECT, sysH, emit, shape = PadStyle.pillShape, width = sysW, label = profile.label(NxButton.SELECT))
+        Spacer(Modifier.width(SYSTEM_PILL_GAP.dp))
+        PadButton(NxButton.START, sysH, emit, shape = PadStyle.pillShape, width = sysW, label = profile.label(NxButton.START))
+        if (tools != null) {
+            Spacer(Modifier.width(SYSTEM_PILL_GAP.dp))
+            SwapButton(tools, sysH, sysW)
+        }
+    }
+}
+
+/**
  * Left cluster (landscape): [clusterRows] of MENU/toggle, shoulders L1/L2 and the d-pad/analog-stick, pushed to the
  * bottom-left so the d-pad sits low for the left thumb. Transparent. [overGame] (the clusters drawn over the game)
  * moves the MENU/toggle row to the top of the box. Touch shortcut 1 ([shortcuts], [onShortcut], [shortcutPlaceholders]
@@ -2176,6 +2225,9 @@ fun VirtualPadLeft(
     secondRow: Boolean = false,
     rowsOnScreen: Float? = null,
     mic: PadMic? = null,
+    /** The flat-unfolded virtual hinge: shoulders + cluster only, the cluster dropped below the shoulders,
+     * the six pill buttons moved to [VirtualHingePillRow] below the halves. */
+    virtualHinge: Boolean = false,
 ) {
     val emit = rememberEmit(onEvent)
     val stick = rememberStickChoice(useJoystick, onUseJoystickChange)
@@ -2206,11 +2258,11 @@ fun VirtualPadLeft(
                     Modifier.padding(start = nudge + (sysW + SYSTEM_PILL_GAP.dp) * place.fromEdge, top = unit * overlayShortcutTop(place, tools != null)),
                 )
             }
-            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Bottom, horizontalAlignment = Alignment.Start) {
-                val rows = clusterRows(overGame, besidePicture)
-                val flex = flexSpacerRow(rows, overGame && !besidePicture)
+            Column(Modifier.fillMaxSize(), verticalArrangement = if (virtualHinge) Arrangement.Top else Arrangement.Bottom, horizontalAlignment = Alignment.Start) {
+                val rows = if (virtualHinge) listOf(PadRow.SHOULDERS, PadRow.CLUSTER) else clusterRows(overGame, besidePicture)
+                val flex = if (virtualHinge) null else flexSpacerRow(rows, overGame && !besidePicture)
                 rows.forEachIndexed { i, row ->
-                    if (i > 0) Spacer(rowSpacer(i == flex, gap))
+                    if (i > 0) Spacer(if (virtualHinge && i == 1) Modifier.height(unit * VIRTUAL_HINGE_CLUSTER_SPACER_UNITS) else rowSpacer(i == flex, gap))
                     when (row) {
                         PadRow.SYSTEM -> Box(Modifier.heightIn(min = if (besidePicture && secondRow) sysH * 2 + gap else 0.dp)) {
                             PadGroupBox(PadGroup.SYSTEM_LEFT, Modifier.padding(start = nudge, top = if (ps2Overlay) unit * PS2_SYSTEM_DROP else if (ps2Beside) sysH + gap else 0.dp)) {
@@ -2283,6 +2335,9 @@ fun VirtualPadRight(
     unitOverride: Dp? = null,
     secondRow: Boolean = false,
     rowsOnScreen: Float? = null,
+    /** The flat-unfolded virtual hinge: shoulders + cluster only, the cluster dropped below the shoulders,
+     * the six pill buttons moved to [VirtualHingePillRow] below the halves. */
+    virtualHinge: Boolean = false,
 ) {
     val emit = rememberEmit(onEvent)
     // Always Charcoal: the clusters sit translucent over the game, whatever the portrait Pad theme.
@@ -2313,11 +2368,11 @@ fun VirtualPadRight(
                         .padding(end = nudge + (sysW + SYSTEM_PILL_GAP.dp) * place.fromEdge, top = unit * overlayShortcutTop(place, tools != null)),
                 )
             }
-            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Bottom, horizontalAlignment = Alignment.End) {
-                val rows = clusterRows(overGame, besidePicture)
-                val flex = flexSpacerRow(rows, overGame && !besidePicture)
+            Column(Modifier.fillMaxSize(), verticalArrangement = if (virtualHinge) Arrangement.Top else Arrangement.Bottom, horizontalAlignment = Alignment.End) {
+                val rows = if (virtualHinge) listOf(PadRow.SHOULDERS, PadRow.CLUSTER) else clusterRows(overGame, besidePicture)
+                val flex = if (virtualHinge) null else flexSpacerRow(rows, overGame && !besidePicture)
                 rows.forEachIndexed { i, row ->
-                    if (i > 0) Spacer(rowSpacer(i == flex, gap))
+                    if (i > 0) Spacer(if (virtualHinge && i == 1) Modifier.height(unit * VIRTUAL_HINGE_CLUSTER_SPACER_UNITS) else rowSpacer(i == flex, gap))
                     when (row) {
                         PadRow.SYSTEM -> Box(Modifier.heightIn(min = if (besidePicture && secondRow) sysH * 2 + gap else 0.dp)) {
                             PadGroupBox(PadGroup.SYSTEM_RIGHT, Modifier.padding(end = nudge, top = if (ps2Overlay) unit * PS2_SYSTEM_DROP else if (ps2Beside) sysH + gap else 0.dp).align(Alignment.TopEnd)) {

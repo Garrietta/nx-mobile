@@ -94,6 +94,7 @@ import com.nxredux.mobile.ui.nx.PadTools
 import com.nxredux.mobile.ui.nx.PadVibrationProvider
 import com.nxredux.mobile.ui.nx.PortraitOverlayPad
 import com.nxredux.mobile.ui.nx.TouchShortcut
+import com.nxredux.mobile.ui.nx.VirtualHingePillRow
 import com.nxredux.mobile.ui.nx.VirtualPad
 import com.nxredux.mobile.ui.nx.VirtualPadLeft
 import com.nxredux.mobile.ui.nx.VirtualPadRight
@@ -243,6 +244,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private var tabletopDsViews: Pair<ComposeView, ComposeView>? = null
     /** The virtual hinge's pad surface behind the split's bottom half; null without it (real Flex, flat). */
     private var tabletopPadSurfaceView: ComposeView? = null
+    /** The virtual hinge's bottom pill row ([VirtualHingePillRow]); null without it (real Flex, flat). */
+    private var tabletopPillRowView: ComposeView? = null
     /** The surface's geometry; null without the surface. Read in composition. */
     private val tabletopPadSurfaceGeom = mutableStateOf<TabletopPadSurfaceGeom?>(null)
     /** [TabletopPadSurface]'s rects, window px. */
@@ -318,6 +321,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         clusterViews = null
         tabletopDsViews = null
         tabletopPadSurfaceView = null
+        tabletopPillRowView = null
         tabletopPadSurfaceGeom.value = null
         overlayView = null
         toggleView = null
@@ -445,7 +449,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
      * [clusterUnitPx] and [clusterSecondRow], their drawn groups reported to [measured]. Their buttons take their own
      * touches; the gaps pass to the game below.
      */
-    private fun addClusterHalves(root: FrameLayout, overlayLayout: PadLayout, leftLp: FrameLayout.LayoutParams, rightLp: FrameLayout.LayoutParams): Pair<ComposeView, ComposeView> {
+    private fun addClusterHalves(root: FrameLayout, overlayLayout: PadLayout, leftLp: FrameLayout.LayoutParams, rightLp: FrameLayout.LayoutParams, virtualHinge: Boolean = false): Pair<ComposeView, ComposeView> {
         val generation = ++clusterGeneration
         measured.clear()
         // Each half reports its groups as drawn (Pad layout editor moves included); an old pad's last reports are ignored.
@@ -461,14 +465,14 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                 useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, overGame = true, motion = padMotion(), latched = input.gcLatched.value, layout = overlayLayout, tools = padTools(),
                 shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, onGroupBounds = leftBounds,
                 besidePicture = true, unitOverride = clusterUnitPx.value?.let { with(density) { it.toDp() } }, secondRow = clusterSecondRow.value,
-                rowsOnScreen = clusterRowsOnScreen.value, mic = padMic())
+                rowsOnScreen = clusterRowsOnScreen.value, mic = padMic(), virtualHinge = virtualHinge)
         }
         val right = composePad {
             val density = LocalDensity.current
             VirtualPadRight(input::onPad, Modifier.fillMaxSize().padding(end = with(density) { clusterInsetPx.value.toDp() }).alpha(clusterAlpha()), profile = padProfile(), overGame = true, onCStick = padCStick(), latched = input.gcLatched.value, layout = overlayLayout, tools = padTools(),
                 shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, onGroupBounds = rightBounds,
                 besidePicture = true, unitOverride = clusterUnitPx.value?.let { with(density) { it.toDp() } }, secondRow = clusterSecondRow.value,
-                rowsOnScreen = clusterRowsOnScreen.value)
+                rowsOnScreen = clusterRowsOnScreen.value, virtualHinge = virtualHinge)
         }
         addPad(root, left, leftLp)
         addPad(root, right, rightLp)
@@ -490,7 +494,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         // Virtual hinge only, before the halves: each later addPad at the notifications index leaves
         // earlier views below, so the halves draw above the surface and the surface above the game.
         val (w, h) = rootSize()
-        if (isVirtualTabletop(w, h, shape)) {
+        val virtual = isVirtualTabletop(w, h, shape)
+        if (virtual) {
             val surfaceView = composePad {
                 tabletopPadSurfaceGeom.value?.let { TabletopPadSurface(it.top, it.touch, it.windowW, it.windowH) }
             }
@@ -498,11 +503,25 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             addPad(root, surfaceView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         }
         // Controls → Pad layout's Half-folded layout: the halves' own moves, apart from the landscape pad's.
-        tabletopDsViews = addClusterHalves(root, padLayout(PadShape.HALF_FOLDED), lp(Gravity.START), lp(Gravity.END))
+        // Virtual hinge: shoulders + cluster only, the six pill buttons in the bottom pill row below.
+        tabletopDsViews = addClusterHalves(root, padLayout(PadShape.HALF_FOLDED), lp(Gravity.START), lp(Gravity.END), virtualHinge = virtual)
         val pad = tabletopDsPad(shape)
         clusterUnitPx.value = pad.unitPx
         clusterSecondRow.value = pad.secondRow
         clusterRowsOnScreen.value = null   // the boxes are kept inside the root ([tabletopDsPadBoxes])
+        if (virtual) {
+            // Below the halves, added after them so it draws above their empty bottom strips: the six pill
+            // buttons in one centred row along the very bottom, filling the bottom void. Its height is the
+            // system pills' height (0.72 unit, as in the halves' system row) plus the halves' padding.
+            val pillH = (0.72f * pad.unitPx + 2f * LayoutConstants.CLUSTER_PADDING_DP * shape.density).roundToInt()
+            val pillRow = composePad {
+                val density = LocalDensity.current
+                val unitDp = with(density) { (clusterUnitPx.value ?: pad.unitPx).toDp() }
+                VirtualHingePillRow(input::onPad, padProfile(), padTools(), PadStickModes[padStickKey, padProfile().stickByDefault], ::onPadStickMode, unitDp, Modifier.fillMaxSize())
+            }
+            tabletopPillRowView = pillRow
+            addPad(root, pillRow, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, pillH, Gravity.BOTTOM))
+        }
         placeTabletopDs(tt, tabletopDsPlacement(shape, tt, pad))
     }
 
@@ -967,7 +986,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         // Waiting for the picture ([reveal]): invisible, not gone, so the clusters are still laid out and measured.
         val waiting = !reveal.shouldShow(SystemClock.uptimeMillis())
         val placed = listOfNotNull(
-            clusterViews?.first, clusterViews?.second, tabletopDsViews?.first, tabletopDsViews?.second, tabletopPadSurfaceView, overlayView, bandView?.takeIf { bandWaits },
+            clusterViews?.first, clusterViews?.second, tabletopDsViews?.first, tabletopDsViews?.second, tabletopPadSurfaceView, tabletopPillRowView, overlayView, bandView?.takeIf { bandWaits },
         )
         padViews.forEach { v ->
             v.visibility = when {
