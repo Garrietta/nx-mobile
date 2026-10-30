@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.window.layout.WindowMetricsCalculator
 import com.nxredux.mobile.R
 import com.nxredux.mobile.layout.CoreFrame
+import com.nxredux.mobile.layout.DeviceTraits
 import com.nxredux.mobile.layout.DsKind
 import com.nxredux.mobile.layout.LayoutConstants
 import com.nxredux.mobile.layout.PadRoom
@@ -520,10 +521,14 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
 
     /**
      * The half-folded DS / 3DS pad's unit (the cover screen's button size, [tabletopDsUnitPx]) and reach in the window
-     * [shape]: the halves' drawn buttons once both have reported ([MeasuredButtons]), else the estimate.
+     * [shape]: the halves' drawn buttons once both have reported ([MeasuredButtons]), else the estimate. The
+     * flat-unfolded virtual hinge scales the halves down ([VIRTUAL_PAD_SCALE]): the controls sit aside of the touch
+     * screen, not crowding it; the real half-folded pad keeps the cover screen's size.
      */
     fun tabletopDsPad(shape: WindowShape = activity.windowShape()): LandscapePad {
-        val unit = tabletopDsUnitPx(shape.ydpi, shape.density)
+        val baseUnit = tabletopDsUnitPx(shape.ydpi, shape.density)
+        val (w, h) = rootSize()
+        val unit = if (isVirtualTabletop(w, h, shape)) baseUnit * VIRTUAL_PAD_SCALE else baseUnit
         val secondRow = besideSecondRow(padTools(), host.padShortcuts, placeholders = false)
         val drawn = measured.accepted.takeIf { tabletopDsViews != null }
         val r = reach(
@@ -536,13 +541,17 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     /**
      * Where half-folded [tt] puts this DS / 3DS game's screens and pad halves in the window [shape] ([tabletopDs], window
      * px): the hinge from [tt], the [pad]'s unit, reach and second row, no halves with a controller in the layout.
+     * The flat-unfolded virtual hinge centres the touch screen in the bottom half instead of against the fold.
      */
-    fun tabletopDsPlacement(shape: WindowShape, tt: TabletopLayout, pad: LandscapePad = tabletopDsPad(shape)): TabletopDsPlacement =
-        tabletopDs(
+    fun tabletopDsPlacement(shape: WindowShape, tt: TabletopLayout, pad: LandscapePad = tabletopDsPad(shape)): TabletopDsPlacement {
+        val (w, h) = rootSize()
+        return tabletopDs(
             shape.widthPx, shape.heightPx, shape.screenClass, shape.cutoutTop, hingeTop = tt.menuBottom, hingeBottom = tt.padTop,
             if (N3dsOptions.appliesTo(layoutTag())) DsKind.N3DS else DsKind.DS, pad.unitPx, pad.reach, shape.density,
             controller = layoutControllerNames().isNotEmpty(), secondRow = pad.secondRow, big = n3dsTabletopBig,
+            bottomCentred = isVirtualTabletop(w, h, shape),
         )
+    }
 
     /**
      * Half-folded 3DS: the screen drawn first (above the hinge, or on top of the Flip's stack); SWAP trades it
@@ -792,17 +801,29 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         game.post { relayoutFrontend() }
     }
 
-    /** The tabletop split for the current [posture] and root size ([rootSize]), or null (flat, no size yet). */
+    /**
+     * The tabletop split for the current [posture] and root size ([rootSize]), or null (flat, no size yet).
+     * A flat-unfolded foldable in portrait gets the virtual hinge ([virtualHinge]): the DS / 3DS split at the exact
+     * half of the window, as the default, so the split layout no longer needs a partial fold. A real half-folded
+     * posture always wins; anything else flat stays flat.
+     */
     fun tabletop(names: List<String> = layoutControllerNames()): TabletopLayout? {
-        if (posture == Posture.Flat) return null
         val (w, h) = rootSize()
         if (w <= 0 || h <= 0) return null
         val shape = activity.windowShape()
-        val tt = tabletopLayout(posture, w, h, shape.screenClass, cutoutTop, controllerConnected = names.isNotEmpty(), isDualScreenConsole = tabletopDualScreen(layoutTag(), host.dualMode))
+        val dual = tabletopDualScreen(layoutTag(), host.dualMode)
+        val effective = if (posture is Posture.Tabletop) posture
+            else virtualHinge(w, h, shape.screenClass, DeviceTraits.canHalfFold, dual) ?: return null
+        val tt = tabletopLayout(effective, w, h, shape.screenClass, cutoutTop, controllerConnected = names.isNotEmpty(), isDualScreenConsole = dual)
         // A hinge reading the Fold's split cannot fit is not used for the DS / 3DS: flat, with its pad ([usableTabletop]).
         if (tt?.pad == TabletopPad.DS && !usableTabletop(spansHinge = true, tabletopDsPlacement(shape, tt))) return null
         return tt
     }
+
+    /** Whether the current layout is the flat-unfolded virtual hinge ([virtualHinge]), not a real fold. */
+    private fun isVirtualTabletop(w: Int, h: Int, shape: WindowShape): Boolean =
+        posture !is Posture.Tabletop &&
+            virtualHinge(w, h, shape.screenClass, DeviceTraits.canHalfFold, tabletopDualScreen(layoutTag(), host.dualMode)) != null
 
     /**
      * The root's size, or the window's before the root is laid out (onCreate's layout): the root fills the window (the
@@ -980,6 +1001,9 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
 /** [PortraitPadToggle]'s circle: its 6 dp padding from its own edges, and half its 36 dp size above that. */
 private const val PORTRAIT_TOGGLE_EDGE_DP = 6f
 private const val PORTRAIT_TOGGLE_CENTRE_DP = 24f
+
+/** The flat-unfolded virtual hinge's pad scale: the halves draw a little smaller than the half-folded pad. */
+private const val VIRTUAL_PAD_SCALE = 0.85f
 
 /** Extra room round [PortraitPadToggle], dp, past its own padding: [endDp] from the right, [bottomDp] from the bottom. */
 internal data class PortraitToggleInset(val endDp: Float, val bottomDp: Float) {

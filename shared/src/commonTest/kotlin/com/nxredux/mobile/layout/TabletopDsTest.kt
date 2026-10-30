@@ -183,6 +183,18 @@ class TabletopDsTest {
     }
 
     @Test
+    fun virtual_hinge_bottom_screen_sits_centred_in_the_bottom_half() {
+        val p = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.DS, 122f, reach, 2.625f, false, bottomCentred = true)
+        assertEquals(TabletopDsMode.SPLIT, p.mode)
+        // bottom area 1224..2448 (1224 tall); the 4x touch screen (1024x768) centres in it, not against the fold
+        assertEquals(PxRect(412f, 1452f, 1024f, 768f), p.bottom)
+        // top screen unchanged: 6x with its bottom edge on the 1224 fold
+        assertEquals(PxRect(156f, 72f, 1536f, 1152f), p.top)
+        assertNotNull(p.left)
+        assertNotNull(p.right)
+    }
+
+    @Test
     fun a_reading_the_split_cannot_fit_is_not_used_on_the_fold() {
         val bad = place(DsKind.DS, h = 1386, hingeBottom = 1236)   // 150 px below the hinge
         assertEquals(TabletopDsMode.STACKED_TOP, bad.mode)

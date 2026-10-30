@@ -159,4 +159,25 @@ class PostureTest {
         assertEquals(Posture.Flat, seededPosture(flip, hintW = 1080, hintH = 2520, windowW = 2520, windowH = 1080))
         assertEquals(Posture.Flat, seededPosture(flip, hintW = 1080, hintH = 2520, windowW = 1080, windowH = 2400))
     }
+
+    @Test fun virtualHingeIsTheExactHalfForATabletFoldableInPortrait() =
+        assertEquals(
+            Posture.Tabletop(1224, 1224),
+            virtualHinge(windowW = 1848, windowH = 2448, screen = ScreenClass.NEAR_SQUARE_TABLET, canHalfFold = true, dualScreen = true),
+        )
+
+    @Test fun virtualHingeIsNullWithoutAFoldableATabletPortraitOrADualScreenGame() {
+        assertNull(virtualHinge(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, canHalfFold = false, dualScreen = true))
+        assertNull(virtualHinge(1848, 2448, ScreenClass.REGULAR_PHONE, canHalfFold = true, dualScreen = true))
+        assertNull(virtualHinge(2448, 1848, ScreenClass.NEAR_SQUARE_TABLET, canHalfFold = true, dualScreen = true))
+        assertNull(virtualHinge(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, canHalfFold = true, dualScreen = false))
+    }
+
+    @Test fun virtualHingeFeedsTheDsTabletop() {
+        val hinge = virtualHinge(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, canHalfFold = true, dualScreen = true)!!
+        assertEquals(
+            TabletopLayout(gameTop = 0, gameBottom = 2448, padTop = 1224, pad = TabletopPad.DS, menuBottom = 1224),
+            tabletopLayout(hinge, windowW = 1848, windowH = 2448, screen = ScreenClass.NEAR_SQUARE_TABLET, cutoutTop = 0, controllerConnected = false, isDualScreenConsole = true),
+        )
+    }
 }

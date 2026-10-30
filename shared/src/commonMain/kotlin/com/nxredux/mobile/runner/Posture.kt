@@ -66,6 +66,22 @@ fun tabletopLayout(
 }
 
 /**
+ * The virtual hinge for a flat-unfolded foldable in portrait: the DS / 3DS split's default when the phone is fully
+ * open, so the split layout no longer needs a partial fold. Only when the device can half-fold ([canHalfFold]), the
+ * window is tablet-class ([screen.isTablet]: the DS split needs the width for the touch screen between the pad
+ * halves), the window is portrait ([windowH] > [windowW]), and the game is a dual-screen console ([dualScreen]).
+ * The split is the exact half of the window height ([windowH] / 2, a zero-height band like the Flip's): the top
+ * screen fills the top half, the touch screen and the pad halves fill the bottom half. Null otherwise: landscape, a
+ * phone-shaped window, a device without a hinge, or another console keep the flat layout exactly. A real
+ * half-folded posture always wins over this (the caller prefers [Posture.Tabletop]).
+ */
+fun virtualHinge(windowW: Int, windowH: Int, screen: ScreenClass, canHalfFold: Boolean, dualScreen: Boolean): Posture.Tabletop? {
+    if (!canHalfFold || !screen.isTablet || windowH <= windowW || !dualScreen) return null
+    val half = windowH / 2
+    return Posture.Tabletop(half, half)
+}
+
+/**
  * The tabletop split of an area that starts at window y [areaTop] and is [areaW] x [areaH] (the main app's shell, inside
  * the system bars), for a [posture] in window px; null when flat or the hinge does not split the area into two halves of
  * at least the minimum share. Positions are area-relative; the main app has no DS layout, so the screen class is moot.

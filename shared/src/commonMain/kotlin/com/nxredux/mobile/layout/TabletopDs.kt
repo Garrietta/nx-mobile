@@ -47,7 +47,9 @@ private const val EPSILON = 0.001f
  * between the pad halves; a phone-shaped foldable stacks both screens above the hinge instead. [secondRow]: the halves
  * draw their second row (STYLUS / SWAP), so their boxes are that row taller, as the landscape pad's. [big]: the screen
  * drawn first (above the hinge, or on top in the stack); after a 3DS SWAP the touch screen, so each rect is fitted to
- * the aspect of the screen it shows (the DS's two screens share one).
+ * the aspect of the screen it shows (the DS's two screens share one). [bottomCentred]: the touch screen sits centred
+ * in the area below the hinge instead of against the fold (the flat-unfolded virtual hinge: the screen moves down
+ * into the bottom half, and the pad halves follow it, since their boxes centre on it).
  */
 fun tabletopDs(
     windowW: Int,
@@ -63,6 +65,7 @@ fun tabletopDs(
     controller: Boolean,
     secondRow: Boolean = false,
     big: NdsScreen = NdsScreen.TOP,
+    bottomCentred: Boolean = false,
 ): TabletopDsPlacement {
     val topArea = PxRect(0f, cutoutTop.toFloat(), windowW.toFloat(), (hingeTop - cutoutTop).toFloat())
     val bottomArea = PxRect(0f, hingeBottom.toFloat(), windowW.toFloat(), (windowH - hingeBottom).toFloat())
@@ -83,7 +86,7 @@ fun tabletopDs(
         topW < 1f || topH < 1f || topH > topArea.height
     ) return stackedTop(topArea, kind, big)
     val top = atFold(topArea, topW, topH, y = hingeTop - topH)
-    val bottom = atFold(bottomArea, bottomW, bottomH, y = hingeBottom.toFloat())
+    val bottom = if (bottomCentred) centred(bottomArea, bottomW, bottomH) else atFold(bottomArea, bottomW, bottomH, y = hingeBottom.toFloat())
     if (controller) return TabletopDsPlacement(TabletopDsMode.SPLIT, top, bottom, null, null)
     // One placement for both halves: the caller mirrors it to the right edge.
     val half = clusterPlacement(bottomArea, bottom, unitPx, reach, density, toolRow = secondRow)
