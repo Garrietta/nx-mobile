@@ -1732,11 +1732,26 @@ private const val SYSTEM_PILL_GAP = 12f
 
 /**
  * The virtual hinge's drop of the d-pad / face cluster below the shoulders, units: with the halves' boxes
- * pinned at the hinge, the shoulders sit just below the fold while the cluster fills the lower half, clear
- * of the bottom pill row ([VirtualHingePillRow]). On the 1848 x 2448 test window (unit ~158 px) this puts
- * the cluster centre ~1945 px — below the half-folded centre (1836) and ~70 px clear of the pill row.
+ * pinned at the hinge, the shoulders sit just below the fold while the cluster drops below the widened
+ * touch screen, clear of the bottom pill row ([VirtualHingePillRow]). The window for both clearances
+ * at once (10 px each side, on the 1848 x 2448 test window at unit ~158 px: the d-pad's right arm,
+ * 1 unit thick, must clear the 4x touch screen's bottom edge at 1992, and the visible down-tip must
+ * clear the pill row's top at 2292) is roughly [2.66, 2.84] units; 2.7 sits inside it — the arm row
+ * at 2008–2166 (16 px below the touch screen) and the visible down-tip at ~2261 (31 px above the
+ * pills). The box height in [com.nxredux.mobile.layout.tabletopDs] follows this same sum
+ * (shoulders + spacer + cluster), so the two cannot drift.
  */
-internal const val VIRTUAL_HINGE_CLUSTER_SPACER_UNITS = 1.8f
+internal const val VIRTUAL_HINGE_CLUSTER_SPACER_UNITS = 2.7f
+
+/**
+ * The virtual hinge's inward shift of the d-pad / face cluster, units: Garrett's 2026-10-30
+ * annotation arrows drop the clusters down and angle slightly inward, toward the screen's
+ * centreline — the arrows give the direction, not a distance, so this is judgment: 0.3 units
+ * (~47 px on the test window), small enough to stay clear of the pill row's middle pills (the
+ * down-tip still clears them vertically) while visibly tucking the clusters in. The shoulders row
+ * is untouched: it must stay clear of the widened touch screen's sides.
+ */
+private const val VIRTUAL_HINGE_CLUSTER_INSET_UNITS = 0.3f
 
 /** An overlay cluster's inset from its screen edge, units: the right cluster's, which the left mirrors over the game. */
 internal const val OVERLAY_EDGE_NUDGE = 0.2f
@@ -2241,6 +2256,8 @@ fun VirtualPadLeft(
             val sysH = unit * 0.72f
             val sysW = unit * SYSTEM_PILL_W_UNITS
             val nudge = unit * leftClusterNudge(overGame || besidePicture)   // inset from the left screen edge
+            // The virtual hinge tucks the cluster row slightly inward (the shoulders stay put).
+            val clusterNudge = if (virtualHinge) nudge + unit * VIRTUAL_HINGE_CLUSTER_INSET_UNITS else nudge
             val gap = unit * 0.35f
             val systemKeys = padSystemRow(PadSide.LEFT, profile, motion != null)
             // The PS2: touch shortcut 1 in MENU's place, MENU under it (beside the picture, on the pad's second row); its
@@ -2296,8 +2313,8 @@ fun VirtualPadLeft(
                             if (mic != null) MicFace(mic, micButtonSize(unit.value).dp, Modifier.padding(start = 8.dp).zIndex(1f))
                             if (!overGame && !besidePicture) ShortcutPiece(TouchSlot.ONE, shortcuts, shortcutPlaceholders, onShortcut, sysH, sysW, Modifier.padding(start = gap))
                         }
-                        PadRow.CLUSTER -> if (profile.dualSticks) DualStickSide(PadSide.LEFT, profile, unit * dual.scale, emit, onStick, Modifier.padding(start = nudge), dual.cluster(PadSide.LEFT))
-                        else PadGroupBox(PadGroup.DPAD, Modifier.padding(start = nudge)) {
+                        PadRow.CLUSTER -> if (profile.dualSticks) DualStickSide(PadSide.LEFT, profile, unit * dual.scale, emit, onStick, Modifier.padding(start = clusterNudge), dual.cluster(PadSide.LEFT))
+                        else PadGroupBox(PadGroup.DPAD, Modifier.padding(start = clusterNudge)) {
                             if (stick.useJoystick) NeuJoystick(unit, emit, analog = true, onStick = onStick)
                             else NeuDpad(unit, emit)
                         }
@@ -2351,6 +2368,8 @@ fun VirtualPadRight(
             val sysW = unit * SYSTEM_PILL_W_UNITS
             val glyph = (unit.value * 0.46f).sp
             val nudge = unit * OVERLAY_EDGE_NUDGE   // small inset from the right screen edge
+            // The virtual hinge tucks the cluster row slightly inward (the shoulders stay put).
+            val clusterNudge = if (virtualHinge) nudge + unit * VIRTUAL_HINGE_CLUSTER_INSET_UNITS else nudge
             val gap = unit * 0.35f
             val systemKeys = padSystemRow(PadSide.RIGHT, profile)
             // The PS2: touch shortcut 2 in START's place, SELECT and START under it (beside the picture, on the second row).
@@ -2409,8 +2428,8 @@ fun VirtualPadRight(
                                 }
                             }
                         }
-                        PadRow.CLUSTER -> if (profile.dualSticks) DualStickSide(PadSide.RIGHT, profile, unit * dual.scale, emit, onCStick, Modifier.padding(end = nudge), dual.cluster(PadSide.RIGHT))
-                        else PadGroupBox(PadGroup.FACE, Modifier.padding(end = nudge)) {
+                        PadRow.CLUSTER -> if (profile.dualSticks) DualStickSide(PadSide.RIGHT, profile, unit * dual.scale, emit, onCStick, Modifier.padding(end = clusterNudge), dual.cluster(PadSide.RIGHT))
+                        else PadGroupBox(PadGroup.FACE, Modifier.padding(end = clusterNudge)) {
                             FaceClusterBox(
                                 profile, unit, glyph, emit, onCStick = onCStick,
                                 cStick = cStickLayout(C_STICK_LANDSCAPE_DROP),   // fits the 4.5 x 6 cluster: 3.49 + nudge wide, 5.92 tall

@@ -357,9 +357,13 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             // Where hiding it is offered (DS, 3DS, a game taller than wide) the player can hide the band (Portrait Pad):
             // the game runs to the bottom too, under the overlay pad.
             val bandPx = portraitBandPx(names)
+            // Folded-portrait DS / 3DS draws fullscreen: the game container starts at the window's
+            // top edge (under the camera hole and the hidden status bar area) so the folded regions
+            // can put the top screen full width on top; every other portrait layout keeps the cutout inset.
+            val topMargin = if (foldedPortraitDs(activity.windowShape(), portrait)) 0 else cutoutTop
             game.layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
-            ).apply { bottomMargin = bandPx; topMargin = cutoutTop }
+            ).apply { bottomMargin = bandPx; topMargin = topMargin }
             if (bandPx > 0) {
                 val bandLayout = padLayout(PadShape.PORTRAIT)
                 val pad = composePad { PadThemeProvider(padTheme, padButtons) { VirtualPad(input::onPad, Modifier.fillMaxSize(), analog = true, onStick = input::onStick, profile = padProfile(), useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, onCStick = padCStick(), motion = padMotion(), latched = input.gcLatched.value, layout = bandLayout, tools = padTools(), shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, mic = padMic()) } }
@@ -866,6 +870,20 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         if (tt?.pad == TabletopPad.DS && !usableTabletop(spansHinge = true, tabletopDsPlacement(shape, tt))) return null
         return tt
     }
+
+    /**
+     * The folded-portrait DS / 3DS layout (v0.4.7): a phone-shaped portrait window (the Fold's
+     * cover, or any phone) with a DS / 3DS game and no second screen in use. A real Tabletop
+     * posture always wins, as does a Dual screen mode. On such a window the game container
+     * draws fullscreen ([applyLayout]: topMargin 0, under the camera hole and the hidden status
+     * bar area) and the screens split across it (the renderer's folded regions: the top screen
+     * full width on top, the bottom screen inset in the control panel below it), instead of
+     * stacking above the band. Other consoles' folded layouts are untouched (the game-kind gate).
+     */
+    fun foldedPortraitDs(shape: WindowShape, portrait: Boolean): Boolean =
+        portrait && !shape.screenClass.isTablet &&
+            (NdsOptions.appliesTo(gameTag) || N3dsOptions.appliesTo(gameTag)) &&
+            host.dualMode == DualMode.OFF && tabletop() == null
 
     /** Whether the current layout is the flat-unfolded virtual hinge ([virtualHinge]), not a real fold. */
     private fun isVirtualTabletop(w: Int, h: Int, shape: WindowShape): Boolean =

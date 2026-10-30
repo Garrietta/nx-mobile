@@ -194,9 +194,9 @@ class TabletopDsTest {
     fun virtual_hinge_touch_screen_packs_up_against_the_hinge() {
         val p = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.DS, 122f, reach, 2.625f, false, bottomCentred = true)
         assertEquals(TabletopDsMode.SPLIT, p.mode)
-        // Same inputs as the old centred test: the clearance fit (432 extent + 21 margin each side leaves
-        // 942 px) gives 3x, and its top edge sits ON the fold (1255.5 before).
-        assertEquals(PxRect(540f, 1224f, 768f, 576f), p.bottom)
+        // v0.4.7: the drawn box (0.5509 x 1848 = 1018 px) rounds to the nearest whole DS scale: 4x,
+        // its top edge ON the fold — the same rect whatever the reach inputs (see the test below).
+        assertEquals(PxRect(412f, 1224f, 1024f, 768f), p.bottom)
         // Top screen unchanged: 6x with its bottom edge on the 1224 fold.
         assertEquals(PxRect(156f, 72f, 1536f, 1152f), p.top)
         assertNotNull(p.left)
@@ -204,40 +204,30 @@ class TabletopDsTest {
     }
 
     @Test
-    fun virtual_hinge_3ds_touch_screen_clears_the_grown_halves_with_a_margin() {
+    fun virtual_hinge_3ds_touch_screen_matches_the_drawn_box() {
         val p = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.N3DS, unit11, reach11, 2.625f, false, bottomCentred = true)
         assertEquals(TabletopDsMode.SPLIT, p.mode)
         // Top screen unchanged: full window width, its bottom edge on the 1224 fold.
         assertEquals(PxRect(0f, 116f, 1848f, 1108f), p.top)
-        // 1.1-scale estimate: extent 547.2 + 21 margin each side leaves 711.6 px: 711x533, on the fold —
-        // v0.4.4's 1032x774 exact fit sat 0.2 unit inside the buttons' extent and read as overlap.
-        assertEquals(PxRect(568f, 1224f, 711f, 533f), p.bottom)
-        // A small margin, not an exact fit: ~21 px of pad between the screen and the buttons each side
-        // (the left reads 20.8 after the x flooring, the right 21.8).
-        assertTrue(p.bottom.x - (reach11.edgePx + reach11.buttonsPx) >= 20f)
-        assertTrue(1848f - (p.bottom.x + p.bottom.width) - (reach11.edgePx + reach11.buttonsPx) >= 20f)
+        // v0.4.7: the drawn box fitted at 4:3 — 1018x763, on the fold — wider than v0.4.6's 962x722.
+        // The clusters no longer bound it: they have dropped below it (the spacer), so the clearance
+        // is vertical (the arm row clears its bottom edge), not a side margin to the reach.
+        assertEquals(PxRect(415f, 1224f, 1018f, 763f), p.bottom)
         assertNotNull(p.left)
         assertNotNull(p.right)
     }
 
     @Test
-    fun virtual_hinge_ds_shrinks_to_clear_the_grown_halves_on_the_estimate() {
-        val p = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.DS, unit11, reach11, 2.625f, false, bottomCentred = true)
-        assertEquals(TabletopDsMode.SPLIT, p.mode)
-        // Estimate reach leaves 711.6 px: 2x, on the fold — the settled 3x comes once the buttons measure.
-        assertEquals(PxRect(668f, 1224f, 512f, 384f), p.bottom)
-    }
-
-    @Test
-    fun virtual_hinge_measured_buttons_settle_the_screens_larger() {
-        // After the halves report their drawn groups, the fit uses the measured reach: the DS stays at 3x
-        // (4x would need 412 px a side against a 421.6 px extent) and the 3DS grows to 962x722 — larger
-        // than v0.4.5's 878x659, still margined, its top edge on the fold.
-        val ds = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.DS, unit11, reach11Measured, 2.625f, false, bottomCentred = true)
-        assertEquals(PxRect(540f, 1224f, 768f, 576f), ds.bottom)
-        val n3ds = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.N3DS, unit11, reach11Measured, 2.625f, false, bottomCentred = true)
-        assertEquals(PxRect(443f, 1224f, 962f, 722f), n3ds.bottom)
-        assertTrue(n3ds.bottom.x - (reach11Measured.edgePx + reach11Measured.buttonsPx) >= 20f)
+    fun virtual_hinge_touch_size_is_reach_independent() {
+        // v0.4.7: the drawn box sizes the touch screen, not the reach — the old estimate-to-measured
+        // resize step is gone: estimate and measured reaches give the identical rect, both kinds.
+        for (kind in DsKind.entries) {
+            val est = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, kind, unit11, reach11, 2.625f, false, bottomCentred = true)
+            val measured = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, kind, unit11, reach11Measured, 2.625f, false, bottomCentred = true)
+            assertEquals(est.bottom, measured.bottom, "$kind touch is reach-independent")
+        }
+        val ds = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.DS, unit11, reach11, 2.625f, false, bottomCentred = true)
+        assertEquals(PxRect(412f, 1224f, 1024f, 768f), ds.bottom)
     }
 
     @Test
@@ -247,6 +237,9 @@ class TabletopDsTest {
         assertEquals(1224f, p.left!!.topMarginPx)
         val box = tabletopDsPadBoxes(p, 2448)!!
         assertEquals(1224, box.topMarginPx)
+        // The box holds the dropped cluster: (1 shoulders + 2.7 spacer + 3 cluster) x 157.88 + 2 x 42
+        // = 1142 px, taller than v0.4.6's six-row 1031 px, still inside the window.
+        assertEquals(1142, box.heightPx)
         assertTrue(box.topMarginPx + box.heightPx <= 2448)
     }
 
@@ -261,11 +254,11 @@ class TabletopDsTest {
     }
 
     @Test
-    fun virtual_hinge_3ds_touch_screen_is_larger_than_v045() {
-        // The purple-rectangle size: larger than v0.4.5's settled 878x659, still clearing the halves.
+    fun virtual_hinge_3ds_touch_screen_is_larger_than_v046() {
+        // The drawn-box size: larger than v0.4.6's 962x722.
         val p = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.N3DS, unit11, reach11Measured, 2.625f, false, bottomCentred = true)
-        assertTrue(p.bottom.width > 878f)
-        assertTrue(p.bottom.height > 659f)
+        assertTrue(p.bottom.width > 962f)
+        assertTrue(p.bottom.height > 722f)
     }
 
     @Test

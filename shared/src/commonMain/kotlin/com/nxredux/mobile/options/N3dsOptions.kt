@@ -160,10 +160,11 @@ object N3dsOptions {
 
     /**
      * The core's [LAYOUT] value for the row in use: Large screen and Stacked are its top over bottom ("default"). Half-folded
-     * ([tabletop]) it is always that, whatever the player saved: the app lays the two screens out itself, from a Stacked frame.
+     * ([tabletop]) or folded-portrait ([folded]) it is always that, whatever the player saved: the app lays the two screens
+     * out itself, from a Stacked frame.
      */
-    fun coreLayoutFor(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass, tabletop: Boolean): String =
-        if (tabletop) "default" else when (val app = appLayoutFor(values, landscape, controllerMode, screen)) {
+    fun coreLayoutFor(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass, tabletop: Boolean, folded: Boolean = false): String =
+        if (tabletop || folded) "default" else when (val app = appLayoutFor(values, landscape, controllerMode, screen)) {
             "large", "stacked" -> "default"
             else -> app
         }
@@ -171,12 +172,12 @@ object N3dsOptions {
     /**
      * How many times smaller the core draws the touch screen in its top over bottom: for Large screen half, or in portrait
      * with the picture's [space] known the [fillProportion] of it ([proportionText]); else alike. Half-folded ([tabletop])
-     * the screens are equal ("1") whatever the player saved.
+     * or folded-portrait ([folded]) the screens are equal ("1") whatever the player saved.
      */
     fun stackedSmallProportion(
-        values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass, tabletop: Boolean, space: PxRect? = null,
+        values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass, tabletop: Boolean, space: PxRect? = null, folded: Boolean = false,
     ): String = when {
-        tabletop || appLayoutFor(values, landscape, controllerMode, screen) != "large" -> "1"
+        tabletop || folded || appLayoutFor(values, landscape, controllerMode, screen) != "large" -> "1"
         landscape || space == null -> "2"
         else -> proportionText(fillProportion(space.width, space.height))
     }

@@ -210,12 +210,12 @@ internal class DualScreenController(
 
     /**
      * 3DS leaving split (or unfolding): the swap values from before it ([captureN3dsSwap]) and the orientation's proportion
-     * are back. Still half-folded, the swap stays pinned and the noted values wait for the unfold.
+     * are back. Still half-folded or folded-portrait, the swap stays pinned and the noted values wait for the unfold.
      */
     fun restoreN3dsScreen() {
         val view = retroView ?: return
         if (netplayNow != null) return
-        if (padLayout.tabletop() != null && dualMode == DualMode.OFF) return
+        if ((padLayout.tabletop() != null || padLayout.foldedPortraitDs(activity.windowShape(), !isLandscape())) && dualMode == DualMode.OFF) return
         val stored = storedValues
         val proportion = N3dsOptions.stackedSmallProportion(
             frontendValues, isLandscape(), renderer.ndsControllerMode(), activity.screenClass(), padLayout.tabletop() != null, renderer.n3dsPictureSpace,

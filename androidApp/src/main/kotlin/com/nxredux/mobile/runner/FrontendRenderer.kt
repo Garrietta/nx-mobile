@@ -489,7 +489,8 @@ internal class FrontendRenderer(
         // The DS / 3DS may reach a third into the hidden band's overlay (the Fold's 6x + 3x), the rest a quarter.
         val space = pictureSpace(room, w, h, setAside, overlayH, hiddenBandReach(NdsOptions.appliesTo(gameTag) || N3dsOptions.appliesTo(gameTag)))
         val tabletop = tabletopDsLayout(shape, g)
-        val nds = tabletop?.regions ?: ndsLayout(w, h, g, space, room, overlayH, screen) ?: n3dsSplitLayout(w, h)
+        val folded = foldedPortraitLayout(shape, w, h, g, room)
+        val nds = tabletop?.regions ?: folded ?: ndsLayout(w, h, g, space, room, overlayH, screen) ?: n3dsSplitLayout(w, h)
         // An area too small for one DS screen pixel (NdsLayout returns no regions) is only ever a transient mid-resize
         // size. Keep whatever is drawn now rather than letting an empty list flip a split game to the whole 256x384
         // frame (and the overlay back on) for that moment; the next size change lays it out again.
@@ -505,8 +506,8 @@ internal class FrontendRenderer(
         ndsRegions = nds ?: emptyList()
         val secondDs = secondDsRegions(g)
         secondNdsRegions = secondDs.takeIf { isNds }.orEmpty()
-        if (isNds) reportNds3d(w, h, screen, halfFolded = tabletop != null)
-        if (isN3ds && nds != null) reportN3ds3d(w, h, screen, halfFolded = tabletop != null, g, flat = null, secondDs)
+        if (isNds) reportNds3d(w, h, screen, halfFolded = tabletop != null || folded != null)
+        if (isN3ds && nds != null) reportN3ds3d(w, h, screen, halfFolded = tabletop != null || folded != null, g, flat = null, secondDs)
         input.positionPen()   // on whichever display shows the bottom screen
         setNdsSplit(nds != null)
         view.secondaryRegions = secondRegions(g, secondDs)
@@ -530,7 +531,7 @@ internal class FrontendRenderer(
                 val p = tabletop.placement
                 logLayout(w, h, shape, "TABLETOP_DS", tabletop.pad.takeIf { p.left != null }, 0f, "top=${p.top.short()} bottom=${p.bottom.short()}", "${p.mode} ${if (isN3ds) "3ds" else "ds"} $scales")
             } else {
-                logLayout(w, h, shape, room.name, pad, setAside, spaceAndPicture(space, shown), "ds $scales")
+                logLayout(w, h, shape, room.name, pad, setAside, spaceAndPicture(space, shown), if (folded != null) "folded ds $scales" else "ds $scales")
             }
             return
         }
@@ -739,6 +740,29 @@ internal class FrontendRenderer(
         val shown = regions.shownRect()
         val dy = (placedFor(room, shown, h, overlayH).y - shown.y).roundToInt().toFloat()
         return regions.map { it.copy(dst = it.dst.copy(y = it.dst.y + dy)) }
+    }
+
+    /**
+     * The folded-portrait DS / 3DS layout ([foldedPortraitRegions]): the phone-shaped portrait
+     * window's game area split as the top screen full width on top and the bottom screen inset
+     * in the control panel below it — replacing the stacked-screens-above-the-band arrangement
+     * for DS / 3DS in folded portrait. Null otherwise: not folded portrait, another console, a
+     * Dual screen mode (its own layouts come first, via [padLayout]'s gate), a DS frame that is
+     * not the plain 256x384 stack (one picture, as [ndsLayout] warns), or the band hidden (the
+     * see-through overlay's own rule keeps the screens above it, as before). The 3DS frame is
+     * the Stacked one the core is pinned to while this layout applies ([GameActivity.syncN3dsCore]),
+     * as half-folded. Empty when the area holds no split (the caller keeps the current layout).
+     */
+    private fun foldedPortraitLayout(shape: WindowShape, w: Float, h: Float, g: FloatArray, room: PadRoom): List<NdsRegion>? {
+        if (!padLayout.foldedPortraitDs(shape, !isLandscape())) return null
+        if (room != PadRoom.BAND && room != PadRoom.NONE) return null
+        val kind = when {
+            isN3ds -> DsKind.N3DS
+            NdsOptions.appliesTo(gameTag) && NdsLayout.isDsFrame(g[0].roundToInt(), g[1].roundToInt()) -> DsKind.DS
+            else -> return null
+        }
+        val big = if (kind == DsKind.DS) NdsSettings.parse(frontendValues).big else padLayout.n3dsTabletopBig
+        return foldedPortraitRegions(w, h, kind, big).takeIf { it.isNotEmpty() }
     }
 
     /** The half-folded DS / 3DS layout: the [placement] (game-area px), its screens as [regions], and the [pad] measures it used. */
