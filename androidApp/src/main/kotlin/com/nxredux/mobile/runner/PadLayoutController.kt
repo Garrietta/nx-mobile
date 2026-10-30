@@ -360,10 +360,10 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             // Folded-portrait DS / 3DS draws fullscreen: the game container starts at the window's
             // top edge (under the camera hole and the hidden status bar area) so the folded regions
             // can put the top screen full width on top; every other portrait layout keeps the cutout inset.
-            val topMargin = if (foldedPortraitDs(activity.windowShape(), portrait)) 0 else cutoutTop
+            val gameTopMargin = if (foldedPortraitDs(activity.windowShape(), portrait)) 0 else cutoutTop
             game.layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
-            ).apply { bottomMargin = bandPx; topMargin = topMargin }
+            ).apply { bottomMargin = bandPx; topMargin = gameTopMargin }
             if (bandPx > 0) {
                 val bandLayout = padLayout(PadShape.PORTRAIT)
                 val pad = composePad { PadThemeProvider(padTheme, padButtons) { VirtualPad(input::onPad, Modifier.fillMaxSize(), analog = true, onStick = input::onStick, profile = padProfile(), useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, onCStick = padCStick(), motion = padMotion(), latched = input.gcLatched.value, layout = bandLayout, tools = padTools(), shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, mic = padMic()) } }
