@@ -516,8 +516,11 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         if (virtual) {
             // Below the halves, added after them so it draws above their empty bottom strips: the six pill
             // buttons in one centred row along the very bottom, filling the bottom void. Its height is the
-            // system pills' height (0.72 unit, as in the halves' system row) plus the halves' padding.
-            val pillH = (0.72f * pad.unitPx + 2f * LayoutConstants.CLUSTER_PADDING_DP * shape.density).roundToInt()
+            // system pills' height (0.72 unit, as in the halves' system row) plus one pad: v0.4.9 dropped
+            // the second pad — the row sits at the window bottom, so it needs padding below the pills to
+            // lift them off the edge, not above them — and the pills sit 8 dp lower, buying the dropped
+            // cluster's down-tip its clearance of the pill ink.
+            val pillH = (0.72f * pad.unitPx + 1f * LayoutConstants.CLUSTER_PADDING_DP * shape.density).roundToInt()
             val pillRow = composePad {
                 val density = LocalDensity.current
                 val unitDp = with(density) { (clusterUnitPx.value ?: pad.unitPx).toDp() }

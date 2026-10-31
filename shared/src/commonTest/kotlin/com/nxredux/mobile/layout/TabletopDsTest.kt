@@ -237,9 +237,9 @@ class TabletopDsTest {
         assertEquals(1224f, p.left!!.topMarginPx)
         val box = tabletopDsPadBoxes(p, 2448)!!
         assertEquals(1224, box.topMarginPx)
-        // The box holds the dropped cluster: (1 shoulders + 2.7 spacer + 3 cluster) x 157.88 + 2 x 42
-        // = 1142 px, taller than v0.4.6's six-row 1031 px, still inside the window.
-        assertEquals(1142, box.heightPx)
+        // The box holds the dropped cluster: (1 shoulders + 3.05 spacer + 3 cluster) x 157.88 + 2 x 42
+        // = 1197 px, taller than v0.4.7's 1142 px, still inside the window.
+        assertEquals(1197, box.heightPx)
         assertTrue(box.topMarginPx + box.heightPx <= 2448)
     }
 

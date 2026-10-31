@@ -1733,25 +1733,31 @@ private const val SYSTEM_PILL_GAP = 12f
 /**
  * The virtual hinge's drop of the d-pad / face cluster below the shoulders, units: with the halves' boxes
  * pinned at the hinge, the shoulders sit just below the fold while the cluster drops below the widened
- * touch screen, clear of the bottom pill row ([VirtualHingePillRow]). The window for both clearances
- * at once (10 px each side, on the 1848 x 2448 test window at unit ~158 px: the d-pad's right arm,
- * 1 unit thick, must clear the 4x touch screen's bottom edge at 1992, and the visible down-tip must
- * clear the pill row's top at 2292) is roughly [2.66, 2.84] units; 2.7 sits inside it — the arm row
- * at 2008–2166 (16 px below the touch screen) and the visible down-tip at ~2261 (31 px above the
- * pills). The box height in [com.nxredux.mobile.layout.tabletopDs] follows this same sum
+ * touch screen, clear of the bottom pill row ([VirtualHingePillRow]). v0.4.9: 2.7 left the clusters
+ * overlapping the touch screen's bottom corners on Garrett's device (~35 px: his unit is smaller
+ * relative to his window than the test window's, so the unit-scaled drop fell short of the
+ * width-scaled touch bottom, on DS and 3DS alike). 3.05 drops the arm row a further ~55 px on the
+ * test window (~51 px at his unit), so the bar row clears the touch bottom by ~16 px there, and the
+ * pill row's container is one pad shorter (pillH) to keep the down-tip clear of the pills (+19 px
+ * at his unit). On the 1848 x 2448 test window (unit ~158 px, larger than his) the down-tip ink
+ * sits essentially at the pill ink — the test window is the pessimistic case for the pill gap,
+ * his device the arbiter; the arm row there sits at 2063–2221 (71 px below the 4x touch bottom
+ * at 1992). The box height in [com.nxredux.mobile.layout.tabletopDs] follows this same sum
  * (shoulders + spacer + cluster), so the two cannot drift.
  */
-internal const val VIRTUAL_HINGE_CLUSTER_SPACER_UNITS = 2.7f
+internal const val VIRTUAL_HINGE_CLUSTER_SPACER_UNITS = 3.05f
 
 /**
  * The virtual hinge's inward shift of the d-pad / face cluster, units: Garrett's 2026-10-30
  * annotation arrows drop the clusters down and angle slightly inward, toward the screen's
- * centreline — the arrows give the direction, not a distance, so this is judgment: 0.3 units
- * (~47 px on the test window), small enough to stay clear of the pill row's middle pills (the
- * down-tip still clears them vertically) while visibly tucking the clusters in. The shoulders row
- * is untouched: it must stay clear of the widened touch screen's sides.
+ * centreline — the arrows give the direction, not a distance, so this is judgment. v0.4.9: 0.1 units
+ * — 0.3 left the d-pad's up-arm and the X button exactly flush with the touch screen's side edges
+ * on his device, so the corners had no side margin at all; 0.1 moves each cluster outward ~0.2 units
+ * (~32 px test window, ~29 px at his unit), giving the up-arm and X ~29 px of side clearance while
+ * the bar row and Y clear vertically (the spacer). The shoulders row is untouched: it must stay
+ * clear of the widened touch screen's sides.
  */
-private const val VIRTUAL_HINGE_CLUSTER_INSET_UNITS = 0.3f
+private const val VIRTUAL_HINGE_CLUSTER_INSET_UNITS = 0.1f
 
 /** An overlay cluster's inset from its screen edge, units: the right cluster's, which the left mirrors over the game. */
 internal const val OVERLAY_EDGE_NUDGE = 0.2f
