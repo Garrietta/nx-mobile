@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
@@ -86,9 +85,8 @@ import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.ui.nx.CLUSTER_MAX_WIDTH_SHARE
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.NxTheme
-import com.nxredux.mobile.ui.nx.CharcoalPadColors
+import com.nxredux.mobile.ui.nx.CharcoalPad
 import com.nxredux.mobile.ui.nx.FoldedPanelPad
-import com.nxredux.mobile.ui.nx.LocalPadColors
 import com.nxredux.mobile.ui.nx.NxEmblem
 import com.nxredux.mobile.ui.nx.PadMic
 import com.nxredux.mobile.ui.nx.faceWidthUnits
@@ -561,7 +559,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             val logoH = (pad.unitPx * 1.1f).roundToInt()
             val logoTop = (placement.bottom.y + placement.bottom.height + DECK_TOUCH_CLUSTER_GAP_UNITS * pad.unitPx + 1.5f * pad.unitPx - logoH / 2f).roundToInt()
             val logoView = composePad {
-                CompositionLocalProvider(LocalPadColors provides CharcoalPadColors) {
+                CharcoalPad {
                     NxEmblem(Modifier.fillMaxSize())
                 }
             }

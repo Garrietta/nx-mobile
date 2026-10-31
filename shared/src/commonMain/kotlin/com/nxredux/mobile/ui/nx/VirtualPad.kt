@@ -199,7 +199,7 @@ private val CharcoalFace = PadFace(
 )
 
 /** Charcoal: a flat mid-dark charcoal body (never pure black, so the soft shadows read) with dark sockets. The default. */
-val CharcoalPadColors = PadColors(
+internal val CharcoalPadColors = PadColors(
     surface = PadPalettes.Charcoal.surface,
     face = CharcoalFace,
     dpad = CharcoalFace,
@@ -322,7 +322,16 @@ private fun Modifier.padTopEdge(edge: Color?): Modifier = if (edge == null) this
 }
 
 /** The pad colours in effect; Charcoal unless a [PadThemeProvider] says otherwise (so [NxEmblem] elsewhere stays Charcoal). */
-val LocalPadColors = staticCompositionLocalOf { CharcoalPadColors }
+internal val LocalPadColors = staticCompositionLocalOf { CharcoalPadColors }
+
+/**
+ * Content drawn in the Charcoal pad colours over the game (the deck's NX mark): the colours
+ * themselves stay internal — hosts outside shared use this wrapper, not the colour values.
+ */
+@Composable
+fun CharcoalPad(content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalPadColors provides CharcoalPadColors) { content() }
+}
 
 /** [theme]'s colours; [buttons] picks Black's button set and is ignored by the other themes. */
 internal fun padColorsFor(theme: PadTheme, buttons: PadButtons = PadButtons.DEFAULT): PadColors = when (theme) {
