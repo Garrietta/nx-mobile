@@ -191,74 +191,97 @@ class TabletopDsTest {
     private val reach11Measured = Reach(42f + 0.2f * unit11, 348f)
 
     @Test
-    fun virtual_hinge_touch_screen_packs_up_against_the_hinge() {
-        val p = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.DS, 122f, reach, 2.625f, false, bottomCentred = true)
-        assertEquals(TabletopDsMode.SPLIT, p.mode)
-        // v0.4.7: the drawn box (0.5509 x 1848 = 1018 px) rounds to the nearest whole DS scale: 4x,
-        // its top edge ON the fold — the same rect whatever the reach inputs (see the test below).
-        assertEquals(PxRect(412f, 1224f, 1024f, 768f), p.bottom)
+    fun deck_touch_screen_sits_on_the_hinge_below_the_top_screen() {
+        val ds = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.DS, unit11, reach11, 2.625f, false, bottomCentred = true)
+        assertEquals(TabletopDsMode.SPLIT, ds.mode)
+        // v0.4.10: the deck fit — the bottom half (1224) less the touch-cluster gap, the 3-unit
+        // cluster row, the cluster-pill gap and the pill row leaves 484 px, so a 4:3 screen is
+        // 645 x 483, centred, its top edge ON the fold. Narrower than v0.4.7's 1018 px drawn box:
+        // the old width belonged to the flanking split, not the deck.
+        assertEquals(PxRect(601f, 1224f, 645f, 483f), ds.bottom)
         // Top screen unchanged: 6x with its bottom edge on the 1224 fold.
-        assertEquals(PxRect(156f, 72f, 1536f, 1152f), p.top)
-        assertNotNull(p.left)
-        assertNotNull(p.right)
-    }
-
-    @Test
-    fun virtual_hinge_3ds_touch_screen_matches_the_drawn_box() {
-        val p = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.N3DS, unit11, reach11, 2.625f, false, bottomCentred = true)
-        assertEquals(TabletopDsMode.SPLIT, p.mode)
+        assertEquals(PxRect(156f, 72f, 1536f, 1152f), ds.top)
+        assertNotNull(ds.left)
+        assertNotNull(ds.right)
+        val n3ds = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.N3DS, unit11, reach11, 2.625f, false, bottomCentred = true)
+        assertEquals(TabletopDsMode.SPLIT, n3ds.mode)
         // Top screen unchanged: full window width, its bottom edge on the 1224 fold.
-        assertEquals(PxRect(0f, 116f, 1848f, 1108f), p.top)
-        // v0.4.7: the drawn box fitted at 4:3 — 1018x763, on the fold — wider than v0.4.6's 962x722.
-        // The clusters no longer bound it: they have dropped below it (the spacer), so the clearance
-        // is vertical (the arm row clears its bottom edge), not a side margin to the reach.
-        assertEquals(PxRect(415f, 1224f, 1018f, 763f), p.bottom)
-        assertNotNull(p.left)
-        assertNotNull(p.right)
+        assertEquals(PxRect(0f, 116f, 1848f, 1108f), n3ds.top)
+        // The touch screen shows the bottom screen (4:3), so the same deck fit as DS.
+        assertEquals(PxRect(601f, 1224f, 645f, 483f), n3ds.bottom)
+        assertNotNull(n3ds.left)
+        assertNotNull(n3ds.right)
     }
 
     @Test
-    fun virtual_hinge_touch_size_is_reach_independent() {
-        // v0.4.7: the drawn box sizes the touch screen, not the reach — the old estimate-to-measured
+    fun deck_touch_size_is_reach_independent() {
+        // The deck fit sizes the touch screen, not the reach — the old estimate-to-measured
         // resize step is gone: estimate and measured reaches give the identical rect, both kinds.
         for (kind in DsKind.entries) {
             val est = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, kind, unit11, reach11, 2.625f, false, bottomCentred = true)
             val measured = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, kind, unit11, reach11Measured, 2.625f, false, bottomCentred = true)
             assertEquals(est.bottom, measured.bottom, "$kind touch is reach-independent")
         }
-        val ds = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.DS, unit11, reach11, 2.625f, false, bottomCentred = true)
-        assertEquals(PxRect(412f, 1224f, 1024f, 768f), ds.bottom)
     }
 
     @Test
-    fun virtual_hinge_halves_never_cross_the_hinge() {
+    fun deck_halves_pinned_at_the_hinge_with_the_computed_spacer() {
         val p = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.N3DS, unit11, reach11, 2.625f, false, bottomCentred = true)
         // The grown boxes are pinned at the hinge (their tops on the fold).
         assertEquals(1224f, p.left!!.topMarginPx)
         val box = tabletopDsPadBoxes(p, 2448)!!
         assertEquals(1224, box.topMarginPx)
-        // The box holds the dropped cluster: (1 shoulders + 3.05 spacer + 3 cluster) x 157.88 + 2 x 42
-        // = 1197 px, taller than v0.4.7's 1142 px, still inside the window.
-        assertEquals(1197, box.heightPx)
+        // The box holds shoulders + the deck spacer + cluster, plus one pad: 483 + 55.26 + 473.64
+        // + 42 = 1054 px, 605 px wide (3.3 units + 2 pads), still inside the window.
+        assertEquals(605, box.widthPx)
+        assertEquals(1054, box.heightPx)
         assertTrue(box.topMarginPx + box.heightPx <= 2448)
+        // The spacer itself, computed from the touch fit: 483 + 55.26 - 42 - 157.88 = 338.38 px.
+        assertEquals(338.38f, p.deckSpacerPx!!, 0.5f)
     }
 
     @Test
-    fun virtual_hinge_screens_touch_at_the_hinge() {
-        // v0.4.6: the touch screen's top edge is ON the fold, so the two screens touch each other.
+    fun deck_clusters_clear_the_touch_screen_and_the_pill_row() {
+        val p = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.DS, unit11, reach11, 2.625f, false, bottomCentred = true)
+        // The clusters sit strictly below the touch screen (never beside it): their tops one
+        // touch-cluster gap (0.35 units) below its bottom edge, their bottoms one cluster-pill
+        // gap above the pill row's top — the v0.4.9 corner overlap cannot recur in this geometry.
+        val clusterTop = p.left!!.topMarginPx + 42f + unit11 + p.deckSpacerPx!!
+        val clusterBottom = clusterTop + 3f * unit11
+        val pillTop = 2448f - deckPillRowHeightPx(unit11, 2.625f)
+        assertEquals(55.26f, clusterTop - (p.bottom.y + p.bottom.height), 0.5f)
+        assertEquals(56.42f, pillTop - clusterBottom, 0.5f)
+        assertTrue(clusterTop > p.bottom.y + p.bottom.height)
+        assertTrue(clusterBottom < pillTop)
+    }
+
+    @Test
+    fun deck_width_cap_binds_on_a_narrow_tablet() {
+        // A 1000 px window: the height fit (645 px) would run under L / mic / R, so the
+        // shoulders' extent caps the touch at 210 px wide — still a usable 210 x 157 screen
+        // with a non-negative spacer (12.38 px), not a degenerate stack.
+        val p = tabletopDs(1000, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.DS, unit11, reach11, 2.625f, false, bottomCentred = true)
+        assertEquals(TabletopDsMode.SPLIT, p.mode)
+        assertEquals(PxRect(395f, 1224f, 210f, 157f), p.bottom)
+        assertTrue(p.deckSpacerPx!! >= 0f)
+    }
+
+    @Test
+    fun deck_degenerate_short_window_stacks() {
+        // A bottom half too short for the deck's rows (700 px: the fit goes negative) falls
+        // back to the stack, as for any split that cannot fit.
+        val p = tabletopDs(1848, 1400, ScreenClass.NEAR_SQUARE_TABLET, 0, 700, 700, DsKind.DS, unit11, reach11, 2.625f, false, bottomCentred = true)
+        assertEquals(TabletopDsMode.STACKED_TOP, p.mode)
+    }
+
+    @Test
+    fun deck_screens_touch_at_the_hinge() {
+        // The touch screen's top edge is ON the fold, so the two screens touch each other.
         for (kind in DsKind.entries) {
             val p = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, kind, unit11, reach11Measured, 2.625f, false, bottomCentred = true)
             assertEquals(1224f, p.top.y + p.top.height, "$kind top meets the fold")
             assertEquals(1224f, p.bottom.y, "$kind touch sits on the fold")
         }
-    }
-
-    @Test
-    fun virtual_hinge_3ds_touch_screen_is_larger_than_v046() {
-        // The drawn-box size: larger than v0.4.6's 962x722.
-        val p = tabletopDs(1848, 2448, ScreenClass.NEAR_SQUARE_TABLET, 0, 1224, 1224, DsKind.N3DS, unit11, reach11Measured, 2.625f, false, bottomCentred = true)
-        assertTrue(p.bottom.width > 962f)
-        assertTrue(p.bottom.height > 722f)
     }
 
     @Test

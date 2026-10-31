@@ -762,6 +762,10 @@ internal class FrontendRenderer(
             else -> return null
         }
         val big = if (kind == DsKind.DS) NdsSettings.parse(frontendValues).big else padLayout.n3dsTabletopBig
+        // The folded panel (v0.4.10) comes first: one panel holding the whole pad around the
+        // inset screen, the game area the full window — the inset-screen + band layout below
+        // stays for the panel-not-shown path (a controller, a hidden pad, a geometry null).
+        padLayout.foldedPanelLayout(shape, kind, big)?.let { return it }
         return foldedPortraitRegions(w, h, kind, big).takeIf { it.isNotEmpty() }
     }
 

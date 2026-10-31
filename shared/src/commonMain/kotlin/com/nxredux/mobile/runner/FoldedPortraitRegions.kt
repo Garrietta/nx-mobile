@@ -1,8 +1,11 @@
 package com.nxredux.mobile.runner
 
 import com.nxredux.mobile.layout.DsKind
+import com.nxredux.mobile.layout.LayoutConstants
 import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.PxRect
+import com.nxredux.mobile.ui.nx.PORTRAIT_EMBLEM_GAP
+import com.nxredux.mobile.ui.nx.PORTRAIT_EMBLEM_H
 
 /**
  * The folded-portrait DS / 3DS layout (v0.4.7): the phone-shaped portrait window's game area is
@@ -60,4 +63,97 @@ fun foldedPortraitRegions(w: Float, h: Float, kind: DsKind, big: NdsScreen): Lis
         NdsRegion(big, src(big), PxRect(topX, 0f, topW, topH), shaded = true, touch = big == NdsScreen.BOTTOM),
         NdsRegion(other, src(other), PxRect(bottomX, topH, bottomW, bottomH), shaded = sameSize, touch = other == NdsScreen.BOTTOM),
     )
+}
+
+/**
+ * The folded portrait panel's geometry (v0.4.10), whole px: the big screen on top, the inset
+ * touch screen centred in the panel below it, and the panel's own rows — the pill row on top,
+ * the clusters flanking the inset in the middle, the mic / MENU row at the bottom — all from
+ * one unit, so the renderer (the screen rects) and the host (the panel view) cannot disagree.
+ * [big] is the full-width screen (top or touch, by SWAP); [inset] the small touch screen in the
+ * panel's middle; [panelTop] the panel's top edge (the big screen's bottom); [unitPx] the
+ * panel's button unit; [pillBoxH] / [bottomBoxH] the panel rows' heights. The inset NEVER
+ * shrinks: it is 0.40 of the window width (the folded mockup's share, ~40.5%), and when the
+ * panel would crowd it, the big screen narrows and centres instead — the v0.4.8 floor
+ * principle, with the floor at 0.40 (flanking clusters make 0.50 geometrically impossible on
+ * a 1080 window: two 3-unit clusters + the inset + gaps exceed it). Null when no panel fits:
+ * a degenerate window, or a big screen narrower than half the window after narrowing (the
+ * v0.4.8 sliver rule) — the caller then falls back to the inset-screen + band layout.
+ */
+data class FoldedPanelGeometry(
+    val big: PxRect,
+    val inset: PxRect,
+    val panelTop: Float,
+    val unitPx: Float,
+    val pillBoxH: Float,
+    val bottomBoxH: Float,
+)
+
+fun foldedPanelGeometry(
+    w: Int,
+    h: Int,
+    kind: DsKind,
+    density: Float,
+    faceWUnits: Float,
+): FoldedPanelGeometry? {
+    if (w < 1 || h < 1) return null
+    val pad = LayoutConstants.CLUSTER_PADDING_DP * density
+    val bigAspect = if (kind == DsKind.DS) DS_W / DS_H else N3DS_TOP_W / N3DS_H
+    val insetW = NdsLayout.wholePx(0.40f * w)
+    val insetH = NdsLayout.wholePx(insetW * DS_H / DS_W)
+    val gapX = pad
+    val unitPx = (w - insetW - 2f * gapX - 4f * pad) / (3f + faceWUnits)
+    if (unitPx <= 0f) return null
+    val pillBoxH = 1.0f * unitPx + 2f * pad
+    val bottomBoxH = 0.9f * unitPx + 2f * pad
+    val gap1 = 0.35f * unitPx
+    val logoSpace = (PORTRAIT_EMBLEM_H + 2f * PORTRAIT_EMBLEM_GAP) * unitPx
+    val needed = pillBoxH + gap1 + insetH + logoSpace + bottomBoxH
+    var bigH = NdsLayout.wholePx(w / bigAspect)
+    val panelH0 = h - bigH
+    var bigX = 0f
+    var bigW = w.toFloat()
+    if (needed > panelH0) {
+        // The panel crowds the inset: narrow the big screen (centred) so the panel grows to
+        // exactly what its rows need — the inset keeps its 0.40 floor either way.
+        bigH = NdsLayout.wholePx(h - needed)
+        bigW = NdsLayout.wholePx(bigH * bigAspect)
+        if (bigH < 1f || bigW < w / 2f) return null
+        bigX = NdsLayout.wholePx((w - bigW) / 2f)
+    }
+    val insetX = NdsLayout.wholePx((w - insetW) / 2f)
+    val insetY = NdsLayout.wholePx(bigH + pillBoxH + gap1)
+    return FoldedPanelGeometry(
+        big = PxRect(bigX, 0f, bigW, bigH),
+        inset = PxRect(insetX, insetY, insetW, insetH),
+        panelTop = bigH,
+        unitPx = unitPx,
+        pillBoxH = pillBoxH,
+        bottomBoxH = bottomBoxH,
+    )
+}
+
+/**
+ * The folded portrait panel as game regions: [big] first, then the inset — the same convention
+ * as [foldedPortraitRegions] (src by screen identity, the big screen shaded, the touch screen
+ * touchable wherever it is), so a SWAP only swaps which screen is big. Null when the geometry
+ * is null.
+ */
+fun foldedPanelRegions(
+    w: Int,
+    h: Int,
+    kind: DsKind,
+    big: NdsScreen,
+    density: Float,
+    faceWUnits: Float,
+): List<NdsRegion>? {
+    val g = foldedPanelGeometry(w, h, kind, density, faceWUnits) ?: return null
+    fun region(screen: NdsScreen, dst: PxRect): NdsRegion {
+        val src = when (kind) {
+            DsKind.DS -> NdsLayout.src(screen)
+            DsKind.N3DS -> DualScreen.n3dsSrc(screen)
+        }
+        return NdsRegion(screen, src, dst, shaded = screen == big, touch = screen == NdsScreen.BOTTOM)
+    }
+    return listOf(region(big, g.big), region(big.other, g.inset))
 }

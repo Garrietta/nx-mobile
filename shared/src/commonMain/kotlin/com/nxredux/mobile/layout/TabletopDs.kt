@@ -3,7 +3,6 @@ package com.nxredux.mobile.layout
 import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.runner.NdsLayout
-import com.nxredux.mobile.ui.nx.VIRTUAL_HINGE_CLUSTER_SPACER_UNITS
 import kotlin.math.floor
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -19,6 +18,8 @@ enum class TabletopDsMode { SPLIT, STACKED_TOP }
  * below it, and the pad halves ([left], [right]) beside the bottom screen; both clusters are null with a controller.
  * STACKED_TOP: [top] and [bottom] are the two screens stacked in the area above the hinge and the clusters are null
  * (the normal portrait pad sits below the hinge).
+ * The flat-unfolded virtual hinge's deck ([bottomCentred]) additionally carries [deckSpacerPx]: the spacer the halves
+ * render between their shoulders and cluster rows, so the clusters sit below the touch screen (see [deckTouchSize]).
  */
 data class TabletopDsPlacement(
     val mode: TabletopDsMode,
@@ -26,6 +27,7 @@ data class TabletopDsPlacement(
     val bottom: PxRect,
     val left: ClusterPlacement?,
     val right: ClusterPlacement?,
+    val deckSpacerPx: Float? = null,
 )
 
 private const val DS_W = 256f
@@ -35,16 +37,86 @@ private const val N3DS_BOTTOM_W = 320f
 private const val N3DS_H = 240f
 private const val EPSILON = 0.001f
 
-/** The centred (virtual-hinge) touch screen's width as a share of the window width: the box Garrett
- * drew in his 2026-10-30 annotation video — 595 of the 1080 frame px wide. The DS screen rounds to
- * the nearest whole scale of that width (4x on the test window); the 3DS one fits to it at 4:3.
- * The drawn box's height (freehand, ~1.72 aspect) does not bind: a game screen keeps its aspect,
- * so the DS screen is 4x tall (768) and the 3DS one fitted to the same width (1018 x 763). */
-private const val VIRTUAL_TOUCH_WIDTH_FRACTION = 0.5509f
-
 /** The centred (virtual-hinge) touch screen's gap below the hinge, dp: zero — the touch screen touches the
  * hinge line, so the two screens touch each other (v0.4.6; v0.4.5's 12 dp sliver is gone). */
 private const val VIRTUAL_HINGE_GAP_DP = 0f
+
+/**
+ * The virtual-hinge deck's gaps, in units: touch screen bottom to cluster tops, and cluster bottoms
+ * to the pill row top. The clusters sit strictly below the touch screen (v0.4.10: screens-stacked
+ * + control deck, replacing the v0.4.3–v0.4.9 split whose clusters flanked the touch screen), so
+ * the touch screen's corners can never meet a button — the clearances are vertical, not side margins.
+ */
+internal const val DECK_TOUCH_CLUSTER_GAP_UNITS = 0.35f
+internal const val DECK_CLUSTER_PILL_GAP_UNITS = 0.35f
+
+/** The deck's rows, in units: the shoulders row and the cluster row (the d-pad / face diamond, 3 units each). */
+private const val DECK_SHOULDER_UNITS = 1f
+private const val DECK_CLUSTER_UNITS = 3f
+
+/** The deck's bottom pill row height, px — the same formula the host uses for its container (0.72 unit + one pad). */
+internal fun deckPillRowHeightPx(unitPx: Float, density: Float): Float =
+    0.72f * unitPx + LayoutConstants.CLUSTER_PADDING_DP * density
+
+/**
+ * How far the deck's shoulders reach in from each window edge, px: the pad + nudge + bumper + mic
+ * gap + mic (left; the right, bumper only, is shorter). The touch screen's width cap, so it never
+ * runs under L / mic / R where they flank its upper band.
+ */
+internal fun deckShoulderExtentPx(unitPx: Float, density: Float): Float {
+    val pad = LayoutConstants.CLUSTER_PADDING_DP * density
+    return pad + LayoutConstants.EDGE_NUDGE_UNITS * unitPx + DECK_SHOULDER_UNITS * unitPx +
+        8f * density + 0.9f * unitPx
+}
+
+/**
+ * The deck's touch screen size, whole px, or null when no usable touch fits: the largest 4:3
+ * (DS, and a 3DS bottom screen) or top-screen-aspect (a swapped 3DS) screen whose height fits
+ * the bottom half after the touch-cluster gap, the cluster row, the cluster-pill gap and the
+ * pill row — capped by the width the shoulders leave. The height binds on phone windows, so
+ * the touch lands near the unfolded mockup's share (~39% of the width on the test window's
+ * device scale). The halves' shoulders-to-cluster spacer follows from the same fit (see
+ * [deckSpacerPx]), so the cluster tops sit exactly one touch-cluster gap below the touch bottom.
+ * Null when the fit goes degenerate (a touch under 1 px, or a negative spacer): the caller
+ * falls back to the stack, as for any split that cannot fit.
+ */
+internal fun deckTouchSize(
+    windowW: Float,
+    bottomHalfH: Float,
+    kind: DsKind,
+    big: NdsScreen,
+    unitPx: Float,
+    density: Float,
+): Pair<Float, Float>? {
+    val pad = LayoutConstants.CLUSTER_PADDING_DP * density
+    val maxH = bottomHalfH - DECK_TOUCH_CLUSTER_GAP_UNITS * unitPx - DECK_CLUSTER_UNITS * unitPx -
+        DECK_CLUSTER_PILL_GAP_UNITS * unitPx - deckPillRowHeightPx(unitPx, density)
+    val aspect = if (kind == DsKind.DS) DS_W / DS_H else n3dsAspect(big.other)
+    var touchW = maxH * aspect
+    val maxW = windowW - 2f * deckShoulderExtentPx(unitPx, density)
+    if (touchW > maxW) touchW = maxW
+    if (touchW < 1f) return null
+    val touchH = touchW / aspect
+    if (touchH < 1f) return null
+    if (deckSpacerPx(touchH, unitPx, density) < 0f) return null
+    return Pair(NdsLayout.wholePx(touchW), NdsLayout.wholePx(touchH))
+}
+
+/**
+ * The halves' shoulders-to-cluster spacer for a deck touch screen [touchH] tall, px: the spacer
+ * puts the cluster tops exactly one touch-cluster gap below the touch bottom, given the halves'
+ * box padding and the shoulders row above it.
+ */
+internal fun deckSpacerPx(touchH: Float, unitPx: Float, density: Float): Float {
+    val pad = LayoutConstants.CLUSTER_PADDING_DP * density
+    return touchH + DECK_TOUCH_CLUSTER_GAP_UNITS * unitPx - pad - DECK_SHOULDER_UNITS * unitPx
+}
+
+/** The deck's side boxes' width, px: the cluster row (nudge + inset + 3 units) inside the box padding. */
+internal fun deckSideBoxWidthPx(unitPx: Float, density: Float): Float {
+    val pad = LayoutConstants.CLUSTER_PADDING_DP * density
+    return (LayoutConstants.EDGE_NUDGE_UNITS + VIRTUAL_HINGE_CLUSTER_INSET_UNITS + DECK_CLUSTER_UNITS) * unitPx + 2f * pad
+}
 
 /**
  * The top screen fills the area above the hinge (x 0..[windowW], [cutoutTop]..[hingeTop]); the bottom screen sits in
@@ -60,16 +132,16 @@ private const val VIRTUAL_HINGE_GAP_DP = 0f
  * between the pad halves; a phone-shaped foldable stacks both screens above the hinge instead. [secondRow]: the halves
  * draw their second row (STYLUS / SWAP), so their boxes are that row taller, as the landscape pad's. [big]: the screen
  * drawn first (above the hinge, or on top in the stack); after a 3DS SWAP the touch screen, so each rect is fitted to
- * the aspect of the screen it shows (the DS's two screens share one). [bottomCentred]: the flat-unfolded virtual hinge:
- * the touch screen's top edge sits ON the fold (zero gap — the two screens touch each other) instead of sitting centred in the bottom
- * half (which left a dead band above and below it), and is sized to the box Garrett drew in his 2026-10-30 annotation
- * video ([VIRTUAL_TOUCH_WIDTH_FRACTION] of the window width; the DS scale rounds to the nearest whole scale of it,
- * the 3DS screen fits to it at 4:3) — NOT fitted between the halves: the clusters have dropped below it (the
- * virtual-hinge spacer), so they no longer bound its width, and the reach no longer sizes it (the old
- * estimate-to-measured resize step is gone). The halves' boxes are pinned at the hinge, so the
- * shoulders sit just below it; the halves draw shoulders + cluster only, the cluster dropped below its half-folded
- * place by the virtual-hinge spacer in the halves, and the six pill buttons move to a bottom pill row
- * (VirtualHingePillRow in ui.nx). The half-folded layout keeps the quarter-reach allowance and the centred fit.
+ * the aspect of the screen it shows (the DS's two screens share one). [bottomCentred]: the flat-unfolded virtual hinge's
+ * deck (v0.4.10: screens-stacked + control deck, per Garrett's confirmed unfolded mockup — replacing the v0.4.3–v0.4.9
+ * split, whose clusters flanked the touch screen and kept overlapping its bottom corners): the top screen fills the top
+ * half as before, the touch screen sits centred directly below it with its top edge ON the fold (zero gap — the two
+ * screens touch each other) at the size [deckTouchSize] fits below it, L / mic / R flank the touch screen's upper band,
+ * the d-pad and face cluster sit BELOW the touch screen (never beside it), the NX mark centres on the cluster strip, and
+ * the six pill buttons move to a bottom pill row (VirtualHingePillRow in ui.nx). The halves' boxes are pinned at the
+ * hinge and hold shoulders + cluster with the deck spacer between them ([deckSpacerPx], carried on the placement), so
+ * the cluster tops sit one touch-cluster gap below the touch bottom. The half-folded layout keeps the quarter-reach
+ * allowance and the centred fit.
  */
 fun tabletopDs(
     windowW: Int,
@@ -98,32 +170,26 @@ fun tabletopDs(
         DsKind.DS -> wholeScale(topArea, DS_W, DS_H, atLeast1 = true)
         DsKind.N3DS -> fitted(topArea, n3dsAspect(big))
     }
-    // The centred (virtual-hinge) touch screen is sized to the drawn box, not fitted between the
-    // halves: the clusters have dropped below it (the virtual-hinge spacer in the halves), so they
-    // no longer bound its width — only the bottom area's height does, and the DS scale rounds to
-    // the nearest whole scale of that width. The drawn box's height (freehand, ~1.72 aspect) does
-    // not bind: a game screen keeps its aspect. A controller leaves no halves, so the same drawn
-    // box sizes the screen there too; the half-folded layout keeps the quarter-reach set-aside.
+    // The deck's touch screen is fitted to the bottom half ([deckTouchSize]), not to the drawn
+    // box or the halves: the clusters sit below it, so they no longer bound its width, and the
+    // reach no longer sizes it (the old estimate-to-measured resize step is gone). A controller
+    // leaves no halves, so the same fit sizes the screen there too; the half-folded layout keeps
+    // the quarter-reach set-aside. A null fit is the degenerate guard's trip (below).
     val (bottomW, bottomH) = if (bottomCentred) {
-        val target = windowW.toFloat() * VIRTUAL_TOUCH_WIDTH_FRACTION
-        when (kind) {
-            DsKind.DS -> {
-                val s = (target / DS_W).roundToInt().coerceAtLeast(1)
-                Pair(DS_W * s, DS_H * s)
-            }
-            DsKind.N3DS -> fitted(PxRect(0f, 0f, target, bottomArea.height), n3dsAspect(big.other))
-        }
+        deckTouchSize(windowW.toFloat(), bottomArea.height, kind, big, unitPx, density) ?: Pair(0f, 0f)
     } else when (kind) {
         DsKind.DS -> wholeScale(bottomSpace, DS_W, DS_H, atLeast1 = true)
         DsKind.N3DS -> fitted(bottomSpace, n3dsAspect(big.other))
     }
     // The touch screen must fit below the hinge, and the top screen above it (DS: 1x at least).
     // The fit itself keeps the non-centred screen inside its set-aside; this is the degenerate guard.
-    if (bottomW < 1f || bottomH < 1f || bottomW > bottomArea.width || bottomH > bottomSpace.height ||
-        topW < 1f || topH < 1f || topH > topArea.height
+    // The deck's touch is exempt from the set-aside width (its fit already caps it by the shoulders),
+    // and a null fit (0 x 0) trips the guard the same way.
+    if (bottomW < 1f || bottomH < 1f || topW < 1f || topH < 1f || topH > topArea.height ||
+        (!bottomCentred && (bottomW > bottomArea.width || bottomH > bottomSpace.height))
     ) return stackedTop(topArea, kind, big)
     val top = atFold(topArea, topW, topH, y = hingeTop - topH)
-    // Centred: the touch screen's top edge sits ON the fold (zero gap), its x centred as before — not
+    // Deck: the touch screen's top edge sits ON the fold (zero gap), its x centred as before — not
     // vertically centred, which left a dead band above and below it. The top screen already sits on the
     // fold, so the two screens touch each other.
     val bottom = if (bottomCentred) PxRect(
@@ -132,18 +198,18 @@ fun tabletopDs(
     ) else atFold(bottomArea, bottomW, bottomH, y = hingeBottom.toFloat())
     if (controller) return TabletopDsPlacement(TabletopDsMode.SPLIT, top, bottom, null, null)
     // One placement for both halves: the caller mirrors it to the right edge.
-    val half = clusterPlacement(bottomArea, bottom, unitPx, reach, density, toolRow = secondRow)
-    // Centred: the halves' boxes are pinned at the fold, so the shoulders sit just below the top screen
-    // and the cluster drops from its bottom-half-centred place by the halves' own spacer. (A tall box
-    // centred on the bottom half would otherwise put its top above the hinge.) The box is tall
-    // enough for the dropped cluster — shoulders + spacer + cluster rows, plus the padding — where
-    // the six-row box would clip the cluster's lower half at its new drop.
+    // Deck: the halves' boxes are pinned at the fold and hold shoulders + cluster with the deck
+    // spacer between them, so the shoulders flank the touch screen's upper band and the clusters
+    // sit below it — the box is exactly the rows plus padding (a tall box centred on the bottom
+    // half would otherwise put its top above the hinge). The spacer rides on the placement for
+    // the halves to render.
     val placedHalf = if (bottomCentred) {
-        val boxHeight = (1f + VIRTUAL_HINGE_CLUSTER_SPACER_UNITS + 3f) * unitPx +
-            2f * LayoutConstants.CLUSTER_PADDING_DP * density
-        half.copy(topMarginPx = hingeBottom.toFloat(), boxHeightPx = boxHeight)
-    } else half
-    return TabletopDsPlacement(TabletopDsMode.SPLIT, top, bottom, placedHalf, placedHalf)
+        val pad = LayoutConstants.CLUSTER_PADDING_DP * density
+        val boxHeight = bottomH + DECK_TOUCH_CLUSTER_GAP_UNITS * unitPx + DECK_CLUSTER_UNITS * unitPx + pad
+        ClusterPlacement(deckSideBoxWidthPx(unitPx, density), boxHeight, hingeBottom.toFloat(), 0f, true)
+    } else clusterPlacement(bottomArea, bottom, unitPx, reach, density, toolRow = secondRow)
+    val deckSpacer = if (bottomCentred) deckSpacerPx(bottomH, unitPx, density) else null
+    return TabletopDsPlacement(TabletopDsMode.SPLIT, top, bottom, placedHalf, placedHalf, deckSpacer)
 }
 
 /** A 3DS screen's width over height: 400 x 240 on top, 320 x 240 the touch screen. */

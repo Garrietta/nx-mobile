@@ -1328,8 +1328,8 @@ internal fun portraitBottomRow(shortcuts: Map<TouchSlot, TouchShortcut>, placeho
 )
 
 /** The portrait NX mark's height and its gap over MENU's row, units. */
-private const val PORTRAIT_EMBLEM_H = 1.1f
-private const val PORTRAIT_EMBLEM_GAP = 0.3f
+internal const val PORTRAIT_EMBLEM_H = 1.1f
+internal const val PORTRAIT_EMBLEM_GAP = 0.3f
 
 /** The gap between the portrait top row's pills, and the least between them and the shoulders, dp. */
 internal const val PORTRAIT_TOP_GAP = 8f
@@ -1731,31 +1731,15 @@ private const val SYSTEM_PILL_W_UNITS = 1.4f
 private const val SYSTEM_PILL_GAP = 12f
 
 /**
- * The virtual hinge's drop of the d-pad / face cluster below the shoulders, units: with the halves' boxes
- * pinned at the hinge, the shoulders sit just below the fold while the cluster drops below the widened
- * touch screen, clear of the bottom pill row ([VirtualHingePillRow]). v0.4.9: 2.7 left the clusters
- * overlapping the touch screen's bottom corners on Garrett's device (~35 px: his unit is smaller
- * relative to his window than the test window's, so the unit-scaled drop fell short of the
- * width-scaled touch bottom, on DS and 3DS alike). 3.05 drops the arm row a further ~55 px on the
- * test window (~51 px at his unit), so the bar row clears the touch bottom by ~16 px there, and the
- * pill row's container is one pad shorter (pillH) to keep the down-tip clear of the pills (+19 px
- * at his unit). On the 1848 x 2448 test window (unit ~158 px, larger than his) the down-tip ink
- * sits essentially at the pill ink — the test window is the pessimistic case for the pill gap,
- * his device the arbiter; the arm row there sits at 2063–2221 (71 px below the 4x touch bottom
- * at 1992). The box height in [com.nxredux.mobile.layout.tabletopDs] follows this same sum
- * (shoulders + spacer + cluster), so the two cannot drift.
- */
-internal const val VIRTUAL_HINGE_CLUSTER_SPACER_UNITS = 3.05f
-
-/**
  * The virtual hinge's inward shift of the d-pad / face cluster, units: Garrett's 2026-10-30
  * annotation arrows drop the clusters down and angle slightly inward, toward the screen's
  * centreline — the arrows give the direction, not a distance, so this is judgment. v0.4.9: 0.1 units
  * — 0.3 left the d-pad's up-arm and the X button exactly flush with the touch screen's side edges
  * on his device, so the corners had no side margin at all; 0.1 moves each cluster outward ~0.2 units
- * (~32 px test window, ~29 px at his unit), giving the up-arm and X ~29 px of side clearance while
- * the bar row and Y clear vertically (the spacer). The shoulders row is untouched: it must stay
- * clear of the widened touch screen's sides.
+ * (~32 px test window, ~29 px at his unit). v0.4.10's deck keeps the shift (harmless below the
+ * touch screen, where side clearance no longer binds); the drop itself is now the computed deck
+ * spacer ([deckSpacer] on the halves), not a constant — v0.4.9's 3.05-unit spacer belonged to
+ * the flanking split and is gone with it.
  */
 private const val VIRTUAL_HINGE_CLUSTER_INSET_UNITS = 0.1f
 
@@ -2246,9 +2230,13 @@ fun VirtualPadLeft(
     secondRow: Boolean = false,
     rowsOnScreen: Float? = null,
     mic: PadMic? = null,
-    /** The flat-unfolded virtual hinge: shoulders + cluster only, the cluster dropped below the shoulders,
-     * the six pill buttons moved to [VirtualHingePillRow] below the halves. */
+    /** The flat-unfolded virtual hinge's deck: shoulders + cluster only, the cluster below the
+     * touch screen by [deckSpacer] (the placement's computed spacer, never a constant), the six
+     * pill buttons moved to [VirtualHingePillRow] below the halves. */
     virtualHinge: Boolean = false,
+    /** The deck's shoulders-to-cluster spacer (v0.4.10: computed from the touch screen's fit, so
+     * the cluster tops sit one touch-cluster gap below the touch bottom); the row gap when null. */
+    deckSpacer: Dp? = null,
 ) {
     val emit = rememberEmit(onEvent)
     val stick = rememberStickChoice(useJoystick, onUseJoystickChange)
@@ -2285,7 +2273,7 @@ fun VirtualPadLeft(
                 val rows = if (virtualHinge) listOf(PadRow.SHOULDERS, PadRow.CLUSTER) else clusterRows(overGame, besidePicture)
                 val flex = if (virtualHinge) null else flexSpacerRow(rows, overGame && !besidePicture)
                 rows.forEachIndexed { i, row ->
-                    if (i > 0) Spacer(if (virtualHinge && i == 1) Modifier.height(unit * VIRTUAL_HINGE_CLUSTER_SPACER_UNITS) else rowSpacer(i == flex, gap))
+                    if (i > 0) Spacer(if (virtualHinge && i == 1) Modifier.height(deckSpacer ?: gap) else rowSpacer(i == flex, gap))
                     when (row) {
                         PadRow.SYSTEM -> Box(Modifier.heightIn(min = if (besidePicture && secondRow) sysH * 2 + gap else 0.dp)) {
                             PadGroupBox(PadGroup.SYSTEM_LEFT, Modifier.padding(start = nudge, top = if (ps2Overlay) unit * PS2_SYSTEM_DROP else if (ps2Beside) sysH + gap else 0.dp)) {
@@ -2358,9 +2346,13 @@ fun VirtualPadRight(
     unitOverride: Dp? = null,
     secondRow: Boolean = false,
     rowsOnScreen: Float? = null,
-    /** The flat-unfolded virtual hinge: shoulders + cluster only, the cluster dropped below the shoulders,
-     * the six pill buttons moved to [VirtualHingePillRow] below the halves. */
+    /** The flat-unfolded virtual hinge's deck: shoulders + cluster only, the cluster below the
+     * touch screen by [deckSpacer] (the placement's computed spacer, never a constant), the six
+     * pill buttons moved to [VirtualHingePillRow] below the halves. */
     virtualHinge: Boolean = false,
+    /** The deck's shoulders-to-cluster spacer (v0.4.10: computed from the touch screen's fit, so
+     * the cluster tops sit one touch-cluster gap below the touch bottom); the row gap when null. */
+    deckSpacer: Dp? = null,
 ) {
     val emit = rememberEmit(onEvent)
     // Always Charcoal: the clusters sit translucent over the game, whatever the portrait Pad theme.
@@ -2397,7 +2389,7 @@ fun VirtualPadRight(
                 val rows = if (virtualHinge) listOf(PadRow.SHOULDERS, PadRow.CLUSTER) else clusterRows(overGame, besidePicture)
                 val flex = if (virtualHinge) null else flexSpacerRow(rows, overGame && !besidePicture)
                 rows.forEachIndexed { i, row ->
-                    if (i > 0) Spacer(if (virtualHinge && i == 1) Modifier.height(unit * VIRTUAL_HINGE_CLUSTER_SPACER_UNITS) else rowSpacer(i == flex, gap))
+                    if (i > 0) Spacer(if (virtualHinge && i == 1) Modifier.height(deckSpacer ?: gap) else rowSpacer(i == flex, gap))
                     when (row) {
                         PadRow.SYSTEM -> Box(Modifier.heightIn(min = if (besidePicture && secondRow) sysH * 2 + gap else 0.dp)) {
                             PadGroupBox(PadGroup.SYSTEM_RIGHT, Modifier.padding(end = nudge, top = if (ps2Overlay) unit * PS2_SYSTEM_DROP else if (ps2Beside) sysH + gap else 0.dp).align(Alignment.TopEnd)) {
@@ -2445,6 +2437,159 @@ fun VirtualPadRight(
                 }
             }
             }
+            }
+        }
+    }
+}
+
+/**
+ * The folded portrait panel (v0.4.10): the whole pad reorganised around a small inset touch
+ * screen, per Garrett's confirmed folded mockup — replacing the v0.4.7 layout, whose inset
+ * screen sat above a separate band. The panel's own box is [panelH] tall and starts below the
+ * big screen; the hole ([holeX]..[holeX] + [holeW], [holeY]..[holeY] + [holeH], panel-local)
+ * is where the game draws the inset screen, so the background is four Charcoal strips around
+ * it and never over it — the game shows through, and touches there reach the game (the strips
+ * take no input, as the existing halves' background does). Rows, top to bottom: the tool pills
+ * flanked by the shoulders ([pillBoxH] tall), the d-pad left and the face diamond right centred
+ * on the hole, the mic + MENU / toggle row ([bottomBoxH] tall), the NX mark centred in the
+ * space between the hole and the bottom row. The panel draws the real tool rows the app
+ * already produces ([portraitTopPills], [portraitBottomRow]) — never invented pills — and the
+ * down-chevron is NOT here: it is the existing android-side PortraitPadToggle at the panel's
+ * bottom-right. The pad layout editor's moves do not apply to this panel (no PadGroupBox, the
+ * VirtualHingePillRow precedent); the deck strips reuse VirtualPadLeft / Right, so their
+ * moves still apply there.
+ */
+@Composable
+internal fun FoldedPanelPad(
+    onEvent: (PadEvent) -> Unit,
+    onStick: ((Float, Float) -> Unit)?,
+    profile: PadProfile,
+    useJoystick: Boolean?,
+    onUseJoystickChange: (Boolean) -> Unit,
+    onCStick: ((Float, Float) -> Unit)?,
+    latched: Set<NxButton>,
+    tools: PadTools?,
+    motion: PadMotion?,
+    shortcuts: Map<TouchSlot, TouchShortcut>,
+    onShortcut: (TouchSlot, Boolean) -> Unit,
+    shortcutPlaceholders: Boolean,
+    mic: PadMic?,
+    unit: Dp,
+    panelW: Dp,
+    panelH: Dp,
+    holeX: Dp,
+    holeY: Dp,
+    holeW: Dp,
+    holeH: Dp,
+    pillBoxH: Dp,
+    bottomBoxH: Dp,
+    analog: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    val emit = rememberEmit(onEvent)
+    val stick = rememberStickChoice(useJoystick, onUseJoystickChange)
+    // Always Charcoal: the panel is the pad surface, whatever the portrait Pad theme.
+    CompositionLocalProvider(LocalPadColors provides CharcoalPadColors) {
+        Box(modifier.fillMaxSize()) {
+            val surface = LocalPadColors.current.surface
+            val pad = CLUSTER_PADDING.dp
+            // The four background strips around the hole (top, bottom, left, right); the hole itself
+            // stays open, so the game draws the inset screen there and touches reach it.
+            Box(Modifier.fillMaxWidth().height(holeY).background(surface))
+            Box(Modifier.fillMaxWidth().height(panelH - holeY - holeH).align(Alignment.BottomCenter).background(surface))
+            Box(Modifier.width(holeX).height(holeH).offset(y = holeY).background(surface))
+            Box(
+                Modifier.fillMaxWidth().height(holeH).offset(y = holeY)
+                    .padding(start = holeX + holeW).background(surface),
+            )
+            // The pill row across the panel's top: shoulders in equal halves either side, the real
+            // tool pills centred (narrowed by the same rule as the portrait band's top row).
+            val topPills = portraitTopPills(profile, tools != null, motion != null)
+            val leftShoulders = padShoulders(PadSide.LEFT, profile)
+            val rightShoulders = padShoulders(PadSide.RIGHT, profile)
+            fun shouldersWidth(buttons: List<NxButton>): Dp =
+                buttons.fold(0.dp) { w, b -> w + if (b == NxButton.L1 || b == NxButton.R1) unit * 1.0f else unit * 0.72f } +
+                    8.dp * (buttons.size - 1).coerceAtLeast(0)
+            val sysH = unit * 0.72f
+            val sysW = unit * SYSTEM_PILL_W_UNITS
+            val topW = portraitTopPillWidth(
+                sysW.value, panelW.value, maxOf(shouldersWidth(leftShoulders), shouldersWidth(rightShoulders)).value,
+                topPills.size, PORTRAIT_TOP_GAP,
+            ).dp
+            Row(
+                Modifier.fillMaxWidth().height(pillBoxH).padding(horizontal = pad),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ShoulderButtons(leftShoulders, profile, unit * 1.0f, unit * 0.72f, emit, latched)
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    topPills.forEachIndexed { i, pill ->
+                        if (i > 0) Spacer(Modifier.width(PORTRAIT_TOP_GAP.dp))
+                        when (pill) {
+                            PortraitTopPill.STYLUS -> StylusButton(tools!!, sysH, topW)
+                            PortraitTopPill.SELECT -> PadButton(NxButton.SELECT, sysH, emit, shape = PadStyle.pillShape, width = topW, label = profile.label(NxButton.SELECT))
+                            PortraitTopPill.HOME -> PadButton(NxButton.HOME, sysH, emit, shape = PadStyle.pillShape, width = topW, label = profile.label(NxButton.HOME))
+                            PortraitTopPill.START -> PadButton(NxButton.START, sysH, emit, shape = PadStyle.pillShape, width = topW, label = profile.label(NxButton.START))
+                            PortraitTopPill.MOTION -> MotionButton(motion!!, sysH, topW)
+                            PortraitTopPill.SWAP -> SwapButton(tools!!, sysH, topW)
+                        }
+                    }
+                }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ShoulderButtons(rightShoulders, profile, unit * 1.0f, unit * 0.72f, emit, latched)
+                    }
+                }
+            }
+            // The middle: d-pad left, face diamond right, each centred on the hole's vertical centre.
+            val faceH = faceHeightUnits(profile) * unit
+            val midY = holeY + holeH / 2f
+            Box(Modifier.offset(x = pad + unit * OVERLAY_EDGE_NUDGE, y = midY - unit * 1.5f)) {
+                if (stick.useJoystick && !profile.dualSticks) NeuJoystick(unit, emit, analog = analog, onStick = onStick) else NeuDpad(unit, emit)
+            }
+            Box(Modifier.fillMaxWidth().offset(y = midY - faceH / 2f), contentAlignment = Alignment.CenterEnd) {
+                Box(Modifier.padding(end = pad + unit * OVERLAY_EDGE_NUDGE)) {
+                    FaceClusterBox(profile, unit, (unit.value * 0.46f).sp, emit, onCStick = onCStick)
+                }
+            }
+            // The NX mark, centred in the space between the hole's bottom and the bottom row.
+            val logoTop = holeY + holeH
+            val logoBottom = panelH - bottomBoxH
+            if (logoBottom > logoTop) {
+                Box(
+                    Modifier.fillMaxWidth().height(logoBottom - logoTop).offset(y = logoTop),
+                    contentAlignment = Alignment.Center,
+                ) { NxEmblem(Modifier.size(unit * 1.15f, unit * PORTRAIT_EMBLEM_H)) }
+            }
+            // The bottom row: mic at the start, MENU + the toggle centred with any touch shortcuts.
+            Row(
+                Modifier.fillMaxWidth().height(bottomBoxH).align(Alignment.BottomCenter).padding(horizontal = pad),
+                horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+            ) {
+                mic?.let {
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) { MicFace(it, unit * 0.9f) }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    portraitBottomRow(shortcuts, shortcutPlaceholders).forEach { piece ->
+                        when (piece) {
+                            PortraitBottomPiece.SHORTCUT_1 ->
+                                ShortcutPiece(TouchSlot.ONE, shortcuts, shortcutPlaceholders, onShortcut, sysH, sysW, Modifier.padding(end = PORTRAIT_SHORTCUT_GAP.dp))
+                            PortraitBottomPiece.SYSTEM -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                PadButton(NxButton.MENU, sysH, emit, shape = PadStyle.pillShape, width = sysW)
+                                if (!profile.dualSticks) {
+                                    Spacer(Modifier.width(12.dp))
+                                    ToggleButton(if (stick.useJoystick) "D-PAD" else "STICK", stick::toggle, sysH, sysW)
+                                }
+                            }
+                            PortraitBottomPiece.SHORTCUT_2 ->
+                                ShortcutPiece(TouchSlot.TWO, shortcuts, shortcutPlaceholders, onShortcut, sysH, sysW, Modifier.padding(start = PORTRAIT_SHORTCUT_GAP.dp))
+                        }
+                    }
+                }
+                if (mic != null) Spacer(Modifier.weight(1f))
             }
         }
     }

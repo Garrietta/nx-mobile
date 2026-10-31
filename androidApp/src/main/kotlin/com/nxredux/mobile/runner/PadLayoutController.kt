@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
@@ -39,6 +40,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.window.layout.WindowMetricsCalculator
 import com.nxredux.mobile.R
@@ -49,7 +51,9 @@ import com.nxredux.mobile.layout.LayoutConstants
 import com.nxredux.mobile.layout.PadRoom
 import com.nxredux.mobile.layout.Reach
 import com.nxredux.mobile.layout.TabletopDsPlacement
+import com.nxredux.mobile.layout.DECK_TOUCH_CLUSTER_GAP_UNITS
 import com.nxredux.mobile.layout.bandAwaitsFrame
+import com.nxredux.mobile.layout.deckPillRowHeightPx
 import com.nxredux.mobile.layout.besideMeasures
 import com.nxredux.mobile.layout.besidePlacement
 import com.nxredux.mobile.layout.consoleScale
@@ -82,7 +86,12 @@ import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.ui.nx.CLUSTER_MAX_WIDTH_SHARE
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.NxTheme
+import com.nxredux.mobile.ui.nx.CharcoalPadColors
+import com.nxredux.mobile.ui.nx.FoldedPanelPad
+import com.nxredux.mobile.ui.nx.LocalPadColors
+import com.nxredux.mobile.ui.nx.NxEmblem
 import com.nxredux.mobile.ui.nx.PadMic
+import com.nxredux.mobile.ui.nx.faceWidthUnits
 import com.nxredux.mobile.ui.nx.portraitMicCentre
 import com.nxredux.mobile.ui.nx.portraitMicEdge
 import com.nxredux.mobile.ui.nx.PadGroupBoundsListener
@@ -246,6 +255,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private var tabletopPadSurfaceView: ComposeView? = null
     /** The virtual hinge's bottom pill row ([VirtualHingePillRow]); null without it (real Flex, flat). */
     private var tabletopPillRowView: ComposeView? = null
+    private var deckLogoView: ComposeView? = null
+    private var panelView: ComposeView? = null
     /** The surface's geometry; null without the surface. Read in composition. */
     private val tabletopPadSurfaceGeom = mutableStateOf<TabletopPadSurfaceGeom?>(null)
     /** [TabletopPadSurface]'s rects, window px. */
@@ -322,6 +333,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         tabletopDsViews = null
         tabletopPadSurfaceView = null
         tabletopPillRowView = null
+        deckLogoView = null
+        panelView = null
         tabletopPadSurfaceGeom.value = null
         overlayView = null
         toggleView = null
@@ -360,11 +373,19 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             // Folded-portrait DS / 3DS draws fullscreen: the game container starts at the window's
             // top edge (under the camera hole and the hidden status bar area) so the folded regions
             // can put the top screen full width on top; every other portrait layout keeps the cutout inset.
-            val gameTopMargin = if (foldedPortraitDs(activity.windowShape(), portrait)) 0 else cutoutTop
+            // The folded panel (v0.4.10) replaces the band for DS / 3DS folded portrait: one panel
+            // holding the whole pad around the inset screen, so the game area runs to the window
+            // bottom (bottomMargin 0) and the panel overlays it — the band's own height is 0 here
+            // already ([portraitBandPx] drops it when the panel shows), but the branch is explicit.
+            val folded = foldedPortraitDs(activity.windowShape(), portrait)
+            val panelGeom = if (folded) foldedPanelGeom() else null
+            val gameTopMargin = if (folded) 0 else cutoutTop
             game.layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
-            ).apply { bottomMargin = bandPx; topMargin = gameTopMargin }
-            if (bandPx > 0) {
+            ).apply { bottomMargin = if (panelGeom != null) 0 else bandPx; topMargin = gameTopMargin }
+            if (panelGeom != null) {
+                addFoldedPanel(root, panelGeom)
+            } else if (bandPx > 0) {
                 val bandLayout = padLayout(PadShape.PORTRAIT)
                 val pad = composePad { PadThemeProvider(padTheme, padButtons) { VirtualPad(input::onPad, Modifier.fillMaxSize(), analog = true, onStick = input::onStick, profile = padProfile(), useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, onCStick = padCStick(), motion = padMotion(), latched = input.gcLatched.value, layout = bandLayout, tools = padTools(), shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, mic = padMic()) } }
                 addPad(root, pad, FrameLayout.LayoutParams(
@@ -453,7 +474,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
      * [clusterUnitPx] and [clusterSecondRow], their drawn groups reported to [measured]. Their buttons take their own
      * touches; the gaps pass to the game below.
      */
-    private fun addClusterHalves(root: FrameLayout, overlayLayout: PadLayout, leftLp: FrameLayout.LayoutParams, rightLp: FrameLayout.LayoutParams, virtualHinge: Boolean = false): Pair<ComposeView, ComposeView> {
+    private fun addClusterHalves(root: FrameLayout, overlayLayout: PadLayout, leftLp: FrameLayout.LayoutParams, rightLp: FrameLayout.LayoutParams, virtualHinge: Boolean = false, deckSpacer: Dp? = null): Pair<ComposeView, ComposeView> {
         val generation = ++clusterGeneration
         measured.clear()
         // Each half reports its groups as drawn (Pad layout editor moves included); an old pad's last reports are ignored.
@@ -469,14 +490,14 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                 useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode, overGame = true, motion = padMotion(), latched = input.gcLatched.value, layout = overlayLayout, tools = padTools(),
                 shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, onGroupBounds = leftBounds,
                 besidePicture = true, unitOverride = clusterUnitPx.value?.let { with(density) { it.toDp() } }, secondRow = clusterSecondRow.value,
-                rowsOnScreen = clusterRowsOnScreen.value, mic = padMic(), virtualHinge = virtualHinge)
+                rowsOnScreen = clusterRowsOnScreen.value, mic = padMic(), virtualHinge = virtualHinge, deckSpacer = deckSpacer)
         }
         val right = composePad {
             val density = LocalDensity.current
             VirtualPadRight(input::onPad, Modifier.fillMaxSize().padding(end = with(density) { clusterInsetPx.value.toDp() }).alpha(clusterAlpha()), profile = padProfile(), overGame = true, onCStick = padCStick(), latched = input.gcLatched.value, layout = overlayLayout, tools = padTools(),
                 shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, onGroupBounds = rightBounds,
                 besidePicture = true, unitOverride = clusterUnitPx.value?.let { with(density) { it.toDp() } }, secondRow = clusterSecondRow.value,
-                rowsOnScreen = clusterRowsOnScreen.value, virtualHinge = virtualHinge)
+                rowsOnScreen = clusterRowsOnScreen.value, virtualHinge = virtualHinge, deckSpacer = deckSpacer)
         }
         addPad(root, left, leftLp)
         addPad(root, right, rightLp)
@@ -506,10 +527,15 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             tabletopPadSurfaceView = surfaceView
             addPad(root, surfaceView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         }
+        // The pad first: the deck's spacer (the placement's computed spacer, px) does not depend on
+        // the reach or the measured buttons, so the placement computed here and the one computed
+        // after the halves (for [placeTabletopDs]) agree — the halves render the spacer from this
+        // placement, not from a constant.
+        val pad = tabletopDsPad(shape)
+        val deckSpacer = tabletopDsPlacement(shape, tt, pad).deckSpacerPx?.let { (it / shape.density).dp }
         // Controls → Pad layout's Half-folded layout: the halves' own moves, apart from the landscape pad's.
         // Virtual hinge: shoulders + cluster only, the six pill buttons in the bottom pill row below.
-        tabletopDsViews = addClusterHalves(root, padLayout(PadShape.HALF_FOLDED), lp(Gravity.START), lp(Gravity.END), virtualHinge = virtual)
-        val pad = tabletopDsPad(shape)
+        tabletopDsViews = addClusterHalves(root, padLayout(PadShape.HALF_FOLDED), lp(Gravity.START), lp(Gravity.END), virtualHinge = virtual, deckSpacer = deckSpacer)
         clusterUnitPx.value = pad.unitPx
         clusterSecondRow.value = pad.secondRow
         clusterRowsOnScreen.value = null   // the boxes are kept inside the root ([tabletopDsPadBoxes])
@@ -520,7 +546,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             // the second pad — the row sits at the window bottom, so it needs padding below the pills to
             // lift them off the edge, not above them — and the pills sit 8 dp lower, buying the dropped
             // cluster's down-tip its clearance of the pill ink.
-            val pillH = (0.72f * pad.unitPx + 1f * LayoutConstants.CLUSTER_PADDING_DP * shape.density).roundToInt()
+            val pillH = deckPillRowHeightPx(pad.unitPx, shape.density).roundToInt()
             val pillRow = composePad {
                 val density = LocalDensity.current
                 val unitDp = with(density) { (clusterUnitPx.value ?: pad.unitPx).toDp() }
@@ -528,6 +554,19 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             }
             tabletopPillRowView = pillRow
             addPad(root, pillRow, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, pillH, Gravity.BOTTOM))
+            // The deck's NX mark, centred on the cluster strip: above the halves (added after them),
+            // Charcoal like the deck, in the empty space between the touch screen and the pill row.
+            val placement = tabletopDsPlacement(shape, tt, pad)
+            val logoW = (pad.unitPx * 1.15f).roundToInt()
+            val logoH = (pad.unitPx * 1.1f).roundToInt()
+            val logoTop = (placement.bottom.y + placement.bottom.height + DECK_TOUCH_CLUSTER_GAP_UNITS * pad.unitPx + 1.5f * pad.unitPx - logoH / 2f).roundToInt()
+            val logoView = composePad {
+                CompositionLocalProvider(LocalPadColors provides CharcoalPadColors) {
+                    NxEmblem(Modifier.fillMaxSize())
+                }
+            }
+            deckLogoView = logoView
+            addPad(root, logoView, FrameLayout.LayoutParams(logoW, logoH, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = logoTop })
         }
         placeTabletopDs(tt, tabletopDsPlacement(shape, tt, pad))
     }
@@ -890,6 +929,64 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
             (NdsOptions.appliesTo(gameTag) || N3dsOptions.appliesTo(gameTag)) &&
             host.dualMode == DualMode.OFF && tabletop() == null
 
+    /**
+     * Whether the folded portrait panel shows (v0.4.10): the folded DS / 3DS layout, the band
+     * rule keeping a pad, and the player not having hidden it — the same three conditions as
+     * the band, so the panel replaces the band exactly where the band would have been.
+     */
+    fun foldedPanelShown(shape: WindowShape = activity.windowShape()): Boolean =
+        foldedPortraitDs(shape, true) &&
+            PadBandRule.keepPadBand(portrait = true, layoutControllerNames()) && !portraitPadHidden()
+
+    /** The folded portrait panel's geometry in [shape], or null when it does not show. */
+    fun foldedPanelGeom(shape: WindowShape = activity.windowShape()): FoldedPanelGeometry? {
+        if (!foldedPanelShown(shape)) return null
+        val kind = if (N3dsOptions.appliesTo(gameTag)) DsKind.N3DS else DsKind.DS
+        return foldedPanelGeometry(shape.widthPx, shape.heightPx, kind, shape.density, faceWidthUnits(padProfile()))
+    }
+
+    /**
+     * The folded portrait panel's game regions in [shape] (the renderer's [FrontendRenderer]
+     * branch): the same shared geometry as the panel view, so the inset screen the game draws
+     * and the hole the panel leaves around it are one rect. Null when the panel does not show
+     * (the renderer falls back to the inset-screen + band layout).
+     */
+    fun foldedPanelLayout(shape: WindowShape, kind: DsKind, big: NdsScreen): List<NdsRegion>? {
+        if (!foldedPanelShown(shape)) return null
+        return foldedPanelRegions(shape.widthPx, shape.heightPx, kind, big, shape.density, faceWidthUnits(padProfile()))
+    }
+
+    /** The folded portrait panel view: the whole pad reorganised around the inset screen. */
+    private fun addFoldedPanel(root: FrameLayout, geom: FoldedPanelGeometry) {
+        val shape = activity.windowShape()
+        val panelH = shape.heightPx - geom.panelTop
+        val view = composePad {
+            val localDensity = LocalDensity.current
+            PadThemeProvider(padTheme, padButtons) {
+                FoldedPanelPad(
+                    onEvent = input::onPad, onStick = input::onStick, profile = padProfile(),
+                    useJoystick = PadStickModes[padStickKey, padProfile().stickByDefault], onUseJoystickChange = ::onPadStickMode,
+                    onCStick = padCStick(), latched = input.gcLatched.value, tools = padTools(), motion = padMotion(),
+                    shortcuts = host.padShortcuts, onShortcut = host::onPadShortcut, shortcutPlaceholders = false,
+                    mic = padMic(), unit = with(localDensity) { geom.unitPx.toDp() },
+                    panelW = with(localDensity) { shape.widthPx.toDp() },
+                    panelH = with(localDensity) { panelH.toDp() },
+                    holeX = with(localDensity) { geom.inset.x.toDp() },
+                    holeY = with(localDensity) { (geom.inset.y - geom.panelTop).toDp() },
+                    holeW = with(localDensity) { geom.inset.width.toDp() },
+                    holeH = with(localDensity) { geom.inset.height.toDp() },
+                    pillBoxH = with(localDensity) { geom.pillBoxH.toDp() },
+                    bottomBoxH = with(localDensity) { geom.bottomBoxH.toDp() },
+                    analog = true,
+                )
+            }
+        }
+        panelView = view
+        addPad(root, view, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, panelH.roundToInt(), Gravity.TOP,
+        ).apply { topMargin = geom.panelTop.roundToInt() })
+    }
+
     /** Whether the current layout is the flat-unfolded virtual hinge ([virtualHinge]), not a real fold. */
     private fun isVirtualTabletop(w: Int, h: Int, shape: WindowShape): Boolean =
         posture !is Posture.Tabletop &&
@@ -1014,7 +1111,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         // Waiting for the picture ([reveal]): invisible, not gone, so the clusters are still laid out and measured.
         val waiting = !reveal.shouldShow(SystemClock.uptimeMillis())
         val placed = listOfNotNull(
-            clusterViews?.first, clusterViews?.second, tabletopDsViews?.first, tabletopDsViews?.second, tabletopPadSurfaceView, tabletopPillRowView, overlayView, bandView?.takeIf { bandWaits },
+            clusterViews?.first, clusterViews?.second, tabletopDsViews?.first, tabletopDsViews?.second, tabletopPadSurfaceView, tabletopPillRowView, deckLogoView, panelView, overlayView, bandView?.takeIf { bandWaits },
         )
         padViews.forEach { v ->
             v.visibility = when {
