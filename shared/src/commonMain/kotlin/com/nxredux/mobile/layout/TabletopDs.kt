@@ -97,10 +97,14 @@ internal fun deckTouchSize(
     val maxW = windowW - 2f * deckShoulderExtentPx(unitPx, density)
     if (touchW > maxW) touchW = maxW
     if (touchW < 1f) return null
-    val touchH = touchW / aspect
+    // The height follows the ROUNDED width (whole px): deriving it from the raw fit would
+    // land a pixel taller (484, not 483, on the test window) and throw every downstream
+    // number — the spacer, the box, the pill clearance — off by that pixel.
+    val touchWR = NdsLayout.wholePx(touchW)
+    val touchH = touchWR / aspect
     if (touchH < 1f) return null
     if (deckSpacerPx(touchH, unitPx, density) < 0f) return null
-    return Pair(NdsLayout.wholePx(touchW), NdsLayout.wholePx(touchH))
+    return Pair(touchWR, NdsLayout.wholePx(touchH))
 }
 
 /**
