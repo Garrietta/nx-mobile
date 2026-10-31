@@ -2539,27 +2539,25 @@ class AppStateTest {
         assertIs<Screen.FolderSummary>(st.screen.value)           // setHome saw first setup: its next step (the home holds games)
     }
 
-    // The portrait menu pad belongs to the menu: tool pages (Settings among them) never show it, whatever Controls → Menu pad
-    // says, except Controls (and its Pad layout) and Appearance, where the pad and its theme are previewed.
-    @Test fun the_menu_pad_shows_on_the_menu_and_the_pad_settings_only() = runTest {
+    // The portrait menu pad belongs to the menu and to Settings: the Settings menu and every section show it, whatever
+    // section, while the tools' pages never do. Off is off everywhere.
+    @Test fun the_menu_pad_shows_on_the_menu_and_every_settings_page() = runTest {
         val settings = MemorySettings(ContentRef("Home")).apply { menuPad = true }
         val state = state(settings)
         state.load()
         assertIs<Screen.Systems>(state.screen.value)
         assertEquals(true, state.menuPadShown())                           // the menu
         state.openSettingsMenu()
-        assertEquals(false, state.menuPadShown())                          // Tools → Settings
-        for (section in listOf(SettingsSection.LIBRARY, SettingsSection.EMULATORS, SettingsSection.MAIN_MENU, SettingsSection.LAYOUT_HOME, SettingsSection.SYSTEM)) {
-            state.openSettings(section)
-            assertEquals(false, state.menuPadShown(), "$section")
-        }
-        for (section in listOf(SettingsSection.CONTROLS, SettingsSection.PAD_LAYOUT, SettingsSection.APPEARANCE)) {
+        assertEquals(true, state.menuPadShown())                           // Tools → Settings menu
+        for (section in listOf(SettingsSection.LIBRARY, SettingsSection.EMULATORS, SettingsSection.MAIN_MENU, SettingsSection.LAYOUT_HOME, SettingsSection.SYSTEM, SettingsSection.CONTROLS, SettingsSection.PAD_LAYOUT, SettingsSection.APPEARANCE)) {
             state.openSettings(section)
             assertEquals(true, state.menuPadShown(), "$section")
         }
         settings.menuPad = false
         state.openSettings(SettingsSection.CONTROLS)
         assertEquals(false, state.menuPadShown())                          // off is off there too
+        state.openSettingsMenu()
+        assertEquals(false, state.menuPadShown())                          // and on the Settings menu
     }
 
     // First setup's in-app folder picker is before onboarding asks about the menu pad: no pad there either.
