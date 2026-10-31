@@ -3,6 +3,7 @@ package com.nxredux.mobile.layout
 import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.runner.NdsLayout
+import com.nxredux.mobile.ui.nx.VIRTUAL_HINGE_CLUSTER_INSET_UNITS
 import kotlin.math.floor
 import kotlin.math.min
 import kotlin.math.roundToInt

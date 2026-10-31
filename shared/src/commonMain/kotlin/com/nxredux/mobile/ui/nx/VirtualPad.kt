@@ -1741,7 +1741,7 @@ private const val SYSTEM_PILL_GAP = 12f
  * spacer ([deckSpacer] on the halves), not a constant — v0.4.9's 3.05-unit spacer belonged to
  * the flanking split and is gone with it.
  */
-private const val VIRTUAL_HINGE_CLUSTER_INSET_UNITS = 0.1f
+internal const val VIRTUAL_HINGE_CLUSTER_INSET_UNITS = 0.1f
 
 /** An overlay cluster's inset from its screen edge, units: the right cluster's, which the left mirrors over the game. */
 internal const val OVERLAY_EDGE_NUDGE = 0.2f
@@ -2545,7 +2545,7 @@ internal fun FoldedPanelPad(
                 }
             }
             // The middle: d-pad left, face diamond right, each centred on the hole's vertical centre.
-            val faceH = faceHeightUnits(profile) * unit
+            val faceH = unit * faceHeightUnits(profile)
             val midY = holeY + holeH / 2f
             Box(Modifier.offset(x = pad + unit * OVERLAY_EDGE_NUDGE, y = midY - unit * 1.5f)) {
                 if (stick.useJoystick && !profile.dualSticks) NeuJoystick(unit, emit, analog = analog, onStick = onStick) else NeuDpad(unit, emit)

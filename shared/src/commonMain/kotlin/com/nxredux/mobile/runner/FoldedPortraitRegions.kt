@@ -98,9 +98,9 @@ fun foldedPanelGeometry(
 ): FoldedPanelGeometry? {
     if (w < 1 || h < 1) return null
     val pad = LayoutConstants.CLUSTER_PADDING_DP * density
-    val bigAspect = if (kind == DsKind.DS) DS_W / DS_H else N3DS_TOP_W / N3DS_H
+    val bigAspect = if (kind == DsKind.DS) 4f / 3f else 5f / 3f
     val insetW = NdsLayout.wholePx(0.40f * w)
-    val insetH = NdsLayout.wholePx(insetW * DS_H / DS_W)
+    val insetH = NdsLayout.wholePx(insetW * 3f / 4f)
     val gapX = pad
     val unitPx = (w - insetW - 2f * gapX - 4f * pad) / (3f + faceWUnits)
     if (unitPx <= 0f) return null
