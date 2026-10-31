@@ -199,7 +199,7 @@ private val CharcoalFace = PadFace(
 )
 
 /** Charcoal: a flat mid-dark charcoal body (never pure black, so the soft shadows read) with dark sockets. The default. */
-internal val CharcoalPadColors = PadColors(
+val CharcoalPadColors = PadColors(
     surface = PadPalettes.Charcoal.surface,
     face = CharcoalFace,
     dpad = CharcoalFace,
@@ -322,7 +322,7 @@ private fun Modifier.padTopEdge(edge: Color?): Modifier = if (edge == null) this
 }
 
 /** The pad colours in effect; Charcoal unless a [PadThemeProvider] says otherwise (so [NxEmblem] elsewhere stays Charcoal). */
-internal val LocalPadColors = staticCompositionLocalOf { CharcoalPadColors }
+val LocalPadColors = staticCompositionLocalOf { CharcoalPadColors }
 
 /** [theme]'s colours; [buttons] picks Black's button set and is ignored by the other themes. */
 internal fun padColorsFor(theme: PadTheme, buttons: PadButtons = PadButtons.DEFAULT): PadColors = when (theme) {
@@ -2460,7 +2460,7 @@ fun VirtualPadRight(
  * moves still apply there.
  */
 @Composable
-internal fun FoldedPanelPad(
+fun FoldedPanelPad(
     onEvent: (PadEvent) -> Unit,
     onStick: ((Float, Float) -> Unit)?,
     profile: PadProfile,

@@ -48,7 +48,7 @@ private const val VIRTUAL_HINGE_GAP_DP = 0f
  * + control deck, replacing the v0.4.3–v0.4.9 split whose clusters flanked the touch screen), so
  * the touch screen's corners can never meet a button — the clearances are vertical, not side margins.
  */
-internal const val DECK_TOUCH_CLUSTER_GAP_UNITS = 0.35f
+const val DECK_TOUCH_CLUSTER_GAP_UNITS = 0.35f
 internal const val DECK_CLUSTER_PILL_GAP_UNITS = 0.35f
 
 /** The deck's rows, in units: the shoulders row and the cluster row (the d-pad / face diamond, 3 units each). */
@@ -56,7 +56,7 @@ private const val DECK_SHOULDER_UNITS = 1f
 private const val DECK_CLUSTER_UNITS = 3f
 
 /** The deck's bottom pill row height, px — the same formula the host uses for its container (0.72 unit + one pad). */
-internal fun deckPillRowHeightPx(unitPx: Float, density: Float): Float =
+fun deckPillRowHeightPx(unitPx: Float, density: Float): Float =
     0.72f * unitPx + LayoutConstants.CLUSTER_PADDING_DP * density
 
 /**
