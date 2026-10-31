@@ -65,6 +65,7 @@ import com.nxredux.mobile.netplay.usb.UsbCables
 import com.nxredux.mobile.padlayout.PadLayoutActivity
 import com.nxredux.mobile.runner.AndroidEmulatorConfigStore
 import com.nxredux.mobile.runner.AndroidMicAccess
+import com.nxredux.mobile.runner.goImmersive
 import com.nxredux.mobile.runner.CoreHangNotice
 import com.nxredux.mobile.runner.GameExitCheck
 import com.nxredux.mobile.runner.AndroidUserDataStore
@@ -446,12 +447,14 @@ class MainActivity : ComponentActivity(), FolderPicker {
         // A held direction's repeats are flagged: LEFT / RIGHT switch main menu tabs on a fresh press only. Text prompts
         // (context menu, RetroAchievements) take their buttons in AppState too: A confirms the draft, B cancels.
         router = InputRouter(scope, onPress = { state.onButton(it) }, onRepeat = { state.onButton(it, repeat = true) })
-        // Same inset behaviour on every API level; App pads for the bars, only the modal pads for the IME.
+        // Same inset behaviour on every API level. The bars hide at once, as the game's do ([goImmersive]): the menu opens
+        // fullscreen from its first frame, and the pages pad for the bars at rest (zero while hidden) plus the cutout.
         // Dark bar style: the app is always dark, so the bar icons stay light even when the system is in light mode.
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
+        window.goImmersive()
         setContent {
             // As the home screen, Back on the main menu stays: there is nothing under a launcher. Another instance (the
             // drawer's, in its own task) still closes.
@@ -650,7 +653,10 @@ class MainActivity : ComponentActivity(), FolderPicker {
     /** The menu's window has focus again: [TopScreenHost.recheck], as on resume (no resume when only the focus moved). */
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) TopScreenHost.recheck(this)
+        if (hasFocus) {
+            window.goImmersive()   // back from another activity or a transient bar swipe: the menu stays fullscreen
+            TopScreenHost.recheck(this)
+        }
     }
 
     /** [windowScreenClass] and [windowPx] from one window reading. */

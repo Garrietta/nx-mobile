@@ -120,6 +120,10 @@ internal fun homeListAnchor(heights: List<Int>, s: Int): Pair<Int, Int> {
 internal fun homeListViewport(band: Int, total: Int, pitch: Int): Int =
     if (total <= band) band else (band / maxOf(1, pitch)) * pitch
 
+/** The pill's top shift in a [MainListBody] list: a list that fits sits on its band's bottom ([Arrangement.Bottom]), so its rows start (viewport - total) px below the box top while the pill's row math counts from the top — without the shift the pill floats above the rows and the selected row's on-pill text reads dark on bare background. A longer list fills from the top, so no shift. */
+internal fun homeListPillTopOffset(viewport: Int, total: Int, fits: Boolean): Float =
+    if (fits) (viewport - total).toFloat() else 0f
+
 /**
  * A main menu List's rows ([names]: labels and tags) from [top] (the stats' or the icon row's bottom; the fade parts
  * them) and [gapRows] row pitches of room under it (Home: half, under its stats; a game list: one) down to the box's bottom less
@@ -181,10 +185,13 @@ internal fun MainListBody(
         val identity = remember(names) { nxPillListIdentity(names) }
         val glide = rememberNxPillGlide(identity, selection, names.size, maxOf(1, viewport / maxOf(1, pitchPx)))
         val pillStart = with(density) { gutter.toPx() }
+        // A fitting list sits on its band's bottom, so its rows start (viewport - content) px below the box top while
+        // the pill's row math counts from the top: shift the pill down by exactly that, or it floats above the rows.
+        val pillTopOffset = homeListPillTopOffset(viewport, heights.sum(), fits)
         LazyColumn(
             Modifier.align(if (fits) Alignment.BottomStart else Alignment.TopStart).padding(top = if (fits) 0.dp else start, bottom = if (fits) bottom else 0.dp)
                 .fillMaxWidth().height(with(density) { viewport.toDp() }).nxRowEdgeMask(state)
-                .nxPillGlide(glide, state, pitchPx, colors.accent, start = pillStart),
+                .nxPillGlide(glide, state, pitchPx, colors.accent, start = pillStart, topOffset = pillTopOffset),
             state = state, verticalArrangement = Arrangement.Bottom, flingBehavior = rememberNxRowSnapFling(state),
         ) {
             itemsIndexed(names) { r, name ->

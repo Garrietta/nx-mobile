@@ -12,10 +12,9 @@ import androidx.compose.runtime.staticCompositionLocalOf
 val LocalRestingBars = staticCompositionLocalOf { false }
 
 /**
- * The system bars' insets as they will be once any show or hide animation has run, for the menu's pages (which never
- * hide the bars themselves). [WindowInsets.systemBars] follows the bars' animation frame by frame: back from an
+ * The system bars' insets as they will be once any show or hide animation has run, for the menu's pages. [WindowInsets.systemBars] follows the bars' animation frame by frame: back from an
  * immersive game, the bars are shown again over ~100 ms and the page would lay out without them first, then shrink.
- * Bars hidden for good (by the system or the OEM) still count as hidden. Without [LocalRestingBars], the live insets.
+ * Bars hidden for good (by the system, the OEM, or the app itself at launch) still count as hidden. Without [LocalRestingBars], the live insets.
  */
 @Composable
 expect fun restingSystemBars(): WindowInsets

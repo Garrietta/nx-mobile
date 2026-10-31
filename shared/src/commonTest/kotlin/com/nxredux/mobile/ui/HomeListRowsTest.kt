@@ -11,6 +11,7 @@ import com.nxredux.mobile.ui.nx.homeListAnchor
 import com.nxredux.mobile.ui.nx.homeListRows
 import com.nxredux.mobile.ui.nx.homeListScroll
 import com.nxredux.mobile.ui.nx.homeListViewport
+import com.nxredux.mobile.ui.nx.homeListPillTopOffset
 import com.nxredux.mobile.ui.nx.homeListTopRoom
 import com.nxredux.mobile.ui.nx.MENU_TAB_ROW_HEIGHT
 import androidx.compose.ui.unit.dp
@@ -69,6 +70,13 @@ class HomeListRowsTest {
         assertEquals(6 * 8, homeListViewport(band = 52, total = 200, pitch = 8))
         assertEquals(50, homeListViewport(band = 50, total = 40, pitch = 8))
         assertEquals(2 to 5, homeListAnchor(listOf(10, 10, 10, 10), 25))
+    }
+
+    // A fitting list sits on its band's bottom, so its pill shifts down by the slack; a longer list fills from the top.
+    @Test fun the_pill_shifts_down_only_for_a_fitting_list() {
+        assertEquals(160f, homeListPillTopOffset(viewport = 600, total = 440, fits = true))
+        assertEquals(0f, homeListPillTopOffset(viewport = 440, total = 440, fits = true))
+        assertEquals(0f, homeListPillTopOffset(viewport = 480, total = 800, fits = false))
     }
 
     // The facts line reads as the stats: values apart from their labels, the trophy before the count.

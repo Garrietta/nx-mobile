@@ -1979,13 +1979,13 @@ class AppState(private val deps: AppDeps, private val scope: CoroutineScope) {
 
     /**
      * The screens the portrait menu pad belongs to: the menu (its tabs, game lists, a game's Game Settings over its list,
-     * the Game Switcher). The tools' pages never show it, whatever Controls → Menu pad says, but Controls (and its Pad
-     * layout) and Appearance, which preview the pad and its theme.
+     * the Game Switcher) and every Settings page, so the pad stays visible on Settings exactly as on the other menu
+     * pages. The tools' pages never show it, whatever Controls → Menu pad says.
      */
     private fun padScreen(s: Screen): Boolean = when (s) {
         is Screen.Systems, is Screen.Games, is Screen.Switcher, is Screen.Loading -> true
         is Screen.EmulatorOptions -> gameSettingsModal(s)
-        is Screen.Settings -> s.section == SettingsSection.CONTROLS || s.section.parent == SettingsSection.CONTROLS || s.section == SettingsSection.APPEARANCE
+        is Screen.Settings -> true
         else -> false
     }
 
